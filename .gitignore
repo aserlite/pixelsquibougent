@@ -1,0 +1,54 @@
+# Dossiers de compilation
+build/
+bin/
+lib/
+out/
+dist/
+_deps/
+
+# Fichiers CMake et Makefile
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+Makefile
+compile_commands.json
+CTestTestfile.cmake
+
+# Fichiers objets et bibliothèques
+*.o
+*.obj
+*.so
+*.dylib
+*.dll
+*.a
+*.lib
+*.gch
+*.pch
+
+# Exécutables
+*.exe
+*.out
+*.app
+
+# IDE et éditeurs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.user
+
+# Fichiers système
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+desktop.ini
+
+# Logs et exports vidéo temporaires
+*.log
+*.mp4
+*.mov
+*.avi
+*.mkv

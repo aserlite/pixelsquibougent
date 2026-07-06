@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no"/>
+<meta name="theme-color" content="#000000"/>
+<title>VJ Remote Control Pro</title>
+<style>
+  :root {
+    --bg: #000000;
+    --panel: #111116;
+    --border: #22222b;
+    --text: #ffffff;
+    --text-dim: #707080;
+    --purple: #7c3aed;
+    --orange: #ea580c;
+    --blue: #2563eb;
+    --red: #dc2626;
+    --green: #16a34a;
+    --dark-grey: #27272a;
+  }
+
+  * { 
+    box-sizing: border-box; 
+    margin: 0; 
+    padding: 0; 
+    -webkit-tap-highlight-color: transparent; 
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: monospace;
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: env(safe-area-inset-top, 8px) 8px env(safe-area-inset-bottom, 8px) 8px;
+    gap: 6px;
+    user-select: none;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px;
+    flex-shrink: 0;
+  }
+
+  h1 { font-size: 0.95rem; font-weight: bold; letter-spacing: -0.02em; }
+  
+  #status { 
+    font-size: 0.75rem; 
+    padding: 2px 8px; 
+    font-weight: bold;
+    border: 1px solid var(--border);
+  }
+  #status.ok  { color: #000; background: var(--green); border-color: var(--green); }
+  #status.err { color: #000; background: var(--red); border-color: var(--red); }
+
+  /* Boutons d'action prioritaires (Master Bar) */
+  .action-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; flex-shrink: 0; }
+  .action-row button { padding: 12px 4px; font-size: 0.85rem; font-weight: bold; color: #fff; border: 1px solid transparent; }
+  .btn-flash { background: var(--purple); color: #fff; border-color: var(--purple); }
+  .btn-break { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .btn-drop  { background: var(--red); color: #fff; border-color: var(--red); }
+
+  /* Navigation par Onglets */
+  .tab-nav { display: flex; gap: 4px; flex-shrink: 0; }
+  .tab-btn {
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 8px 4px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    cursor: pointer;
+    text-align: center;
+  }
+  .tab-btn.active { background: var(--dark-grey); color: var(--text); border-color: var(--purple); border-bottom: 2px solid var(--text); }
+
+  /* Zone de contenu des onglets */
+  .tab-content-area { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
+  .tab-pane { display: none; flex: 1; min-height: 0; flex-direction: column; gap: 6px; }
+  .tab-pane.active { display: flex; }
+
+  /* Layout en grille compacte */
+  .grid-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; flex: 1; min-height: 0; }
+  .col { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+
+  section { 
+    background: var(--panel); 
+    border: 1px solid var(--border);
+    padding: 8px; 
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  h2 { 
+    font-size: 0.7rem; 
+    font-weight: bold; 
+    color: var(--text-dim); 
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+
+  /* Grille de boutons bruts */
+  .btn-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; flex: 1; overflow-y: auto; }
+  
+  button {
+    background: var(--dark-grey);
+    color: var(--text);
+    border: 1px solid var(--border);
+    font-family: monospace;
+    font-size: 0.8rem;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 8px 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+  button:active { background: var(--text); color: #000; }
+  button.active { border-color: var(--text); background: #fff; color: #000; }
+
+  /* Pad XY Tactile */
+  #xy-section { flex: 0 0 110px; flex-shrink: 0; }
+  #xy-container {
+    flex: 1;
+    position: relative;
+    background: #040406;
+    border: 1px dashed #333;
+    touch-action: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #xy-crosshair {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--orange);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    left: 50%;
+    top: 50%;
+  }
+  #xy-label { font-size: 0.65rem; color: #222230; pointer-events: none; }
+
+  /* Sliders (Optimisés Cross-Platform) */
+  .slider-box { flex-shrink: 0; display: flex; flex-direction: column; gap: 4px; }
+  .slider-header { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-dim); }
+  input[type=range] { width: 100%; height: 32px; background: transparent; appearance: none; -webkit-appearance: none; }
+  input[type=range]::-webkit-slider-runnable-track { height: 4px; background: var(--border); }
+  input[type=range]::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 20px; height: 20px; background: var(--text); margin-top: -8px; border-radius: 0; }
+
+  /* Module de sélection de couleur */
+  .color-pickers { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 4px; }
+  .color-field { display: flex; flex-direction: column; gap: 2px; }
+  .color-field label { font-size: 0.6rem; color: var(--text-dim); }
+  input[type=color] { width: 100%; height: 35px; background: var(--dark-grey); border: 1px solid var(--border); cursor: pointer; padding: 2px; }
+
+  /* Camera Window */
+  #camera-wrap { display: flex; flex-direction: column; gap: 4px; flex: 1; min-height: 0; }
+  #preview-box { position: relative; width: 100%; flex: 1; background: #000; border: 1px solid var(--border); overflow: hidden; min-height: 50px; }
+  video, canvas { width: 100%; height: 100%; object-fit: cover; }
+  #fps-badge { position: absolute; bottom: 2px; right: 4px; font-size: 0.6rem; color: var(--orange); font-weight: bold; }
+  #btn-cam-toggle { width: 100%; padding: 12px; font-weight: bold; margin-top: 2px; }
+
+  /* Logs Container */
+  #log { font-size: 0.6rem; color: var(--text-dim); overflow-y: auto; flex: 1; list-style: none; max-height: 100%; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>[VJ_ENGINE_REMOTE_v0.6.3]</h1>
+  <span id="status" class="err">OFFLINE</span>
+</header>
+
+<div class="action-row">
+  <button class="btn-break" id="btn-break">BREAK</button>
+  <button class="btn-flash" id="btn-flash">FLASH</button>
+  <button class="btn-drop" id="btn-drop">DROP</button>
+</div>
+
+<div class="tab-nav">
+  <div class="tab-btn active" data-target="tab-routing">01_ROUTING</div>
+  <div class="tab-btn" data-target="tab-transitions">02_TRANSITIONS</div>
+  <div class="tab-btn" data-target="tab-setup">03_SETUP</div>
+</div>
+
+<div class="tab-content-area">
+  <div class="tab-pane active" id="tab-routing">
+    <div class="grid-layout">
+      <div class="col">
+        <section style="flex: 1;">
+          <h2>01_SOURCES</h2>
+          <div class="btn-grid" id="source-grid">
+            <button id="btn-bg-0" class="active">NOISE</button>
+            <button id="btn-bg-1">CURL</button>
+            <button id="btn-bg-2">TUNNEL</button>
+            <button id="btn-bg-3">METABALLS</button>
+            <button id="btn-bg-4">FLUID_BLOB</button>
+            <button id="btn-bg-5">REACT-DIFF</button>
+            <button id="btn-bg-6">CLIFFORD</button>
+            <button id="btn-bg-7">VORONOI</button>
+            <button id="btn-bg-8" style="grid-column: span 2; background: var(--orange); color:#000; display:none;">CAM_SOURCE</button>
+            <button id="btn-bg-9" style="grid-column: span 2; background: var(--purple); color:#fff;">IMAGE_DECK</button>
+          </div>
+        </section>
+      </div>
+
+      <div class="col">
+        <section style="flex: 1;">
+          <h2>02_FILTERS</h2>
+          <div class="btn-grid" id="filter-grid" style="flex: 1 1 auto; min-height: 0;">
+            <button id="btn-eff-0" class="active">RAW</button>
+            <button id="btn-eff-1">SOBEL</button>
+            <button id="btn-eff-2">ASCII</button>
+            <button id="btn-eff-3">DITHER</button>
+            <button id="btn-eff-4">HALFTONE</button>
+            <button id="btn-eff-5">CROSS-HATCH</button>
+          </div>
+          <h2 style="margin-top: 8px;">03_IMPACTS (ON FLASH/KICK)</h2>
+          <div class="btn-grid" id="impact-grid" style="flex: 1 1 auto; min-height: 0;">
+            <button id="btn-imp-0" class="active">NONE</button>
+            <button id="btn-imp-1">CRT_GLITCH</button>
+            <button id="btn-imp-2">PIXEL_SORT</button>
+            <button id="btn-imp-3">SLIT-SCAN</button>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-pane" id="tab-transitions">
+    <section style="flex: 1; gap: 10px;">
+      <h2>01_TRANSITION_TYPE</h2>
+      <div class="btn-grid" id="trans-type-grid" style="flex: 0 0 auto; max-height: 120px; grid-template-columns: repeat(3, 1fr);">
+        <button id="btn-tr-0">CUT</button>
+        <button id="btn-tr-1" class="active">FADE</button>
+        <button id="btn-tr-2">WIPE</button>
+        <button id="btn-tr-3">GLITCH</button>
+        <button id="btn-tr-4">LUMA_MELT</button>
+        <button id="btn-tr-5">RADIAL_WIPE</button>
+        <button id="btn-tr-6">ZOOM_CROSS</button>
+      </div>
+      
+      <div class="slider-box" style="margin-top: 4px;">
+        <div class="slider-header">
+          <span>DURATION</span>
+          <span id="trans-dur-val">0.3 s</span>
+        </div>
+        <input type="range" id="trans-dur-slider" min="0" max="1.0" step="0.1" value="0.3"/>
+      </div>
+
+      <h2 style="margin-top: 8px;">02_DROP-SYNC_AUTO-SWITCH</h2>
+      <div style="display: flex; gap: 6px; flex-shrink: 0;">
+        <button id="btn-autoswitch" style="flex: 1; background: var(--dark-grey); padding: 12px;">AUTO VISUALS : OFF</button>
+        <button id="btn-automacro" class="active" style="flex: 1; background: var(--dark-grey); padding: 12px;">AUTO DROP/BREAK : ON</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="tab-pane" id="tab-setup">
+    <div class="grid-layout">
+      <div class="col">
+        <section class="slider-box">
+          <h2>01_Z-SCORE_K</h2>
+          <div class="slider-header">
+            <span>SENSITIVITY</span>
+            <span id="k-val">2.5</span>
+          </div>
+          <input type="range" id="k-slider" min="1" max="5" step="0.1" value="2.5"/>
+        </section>
+
+        <section class="slider-box" style="margin-top: 2px;">
+          <h2>02_LIVE_PALETTES (BREAK & DROP)</h2>
+          <div class="color-pickers" style="grid-template-columns: 1fr 1fr;">
+            <div class="color-field">
+              <label>BREAK 1</label>
+              <input type="color" id="picker-break1" value="#0d26bf"/>
+            </div>
+            <div class="color-field">
+              <label>BREAK 2</label>
+              <input type="color" id="picker-break2" value="#bf0d8c"/>
+            </div>
+            <div class="color-field">
+              <label>DROP 1</label>
+              <input type="color" id="picker-drop1" value="#d9260d"/>
+            </div>
+            <div class="color-field">
+              <label>DROP 2</label>
+              <input type="color" id="picker-drop2" value="#ffbf00"/>
+            </div>
+          </div>
+        </section>
+
+        <section id="camera-wrap" style="margin-top: 2px;">
+          <h2>03_CAM_STREAM</h2>
+          <div id="preview-box">
+            <video id="preview" muted playsinline autoplay style="display:none;"></video>
+            <canvas id="capture"></canvas>
+            <span id="fps-badge">-- FPS</span>
+          </div>
+          <button id="btn-cam-toggle" style="background:var(--dark-grey);">START CAM</button>
+        </section>
+      </div>
+
+      <div class="col">
+        <section style="flex: 1;">
+          <h2>00_AUDIO_SPECTRUM_MONITOR</h2>
+          <div style="height: 60px; background: #050508; border: 1px solid var(--border); margin-bottom: 6px; position: relative;">
+            <canvas id="audio-canvas" style="width: 100%; height: 100%; display: block;"></canvas>
+          </div>
+          <h2>04_SYSTEM_LOGS</h2>
+          <div id="log"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+
+<section id="xy-section">
+  <h2>05_XY_PERF_PAD</h2>
+  <div id="xy-container">
+    <div id="xy-label">SLIDE_TO_MODULATE</div>
+    <div id="xy-crosshair"></div>
+  </div>
+</section>
+
+<script>
+// ── Connexion Réseau Automatique (IP hôte dynamique) ─────────────────────────
+const host = location.hostname;
+const port = location.port || 18080;
+const wsUrl = `ws://${host}:${port}/vj-control`;
+const statusBadge = document.getElementById('status');
+const logContainer = document.getElementById('log');
+
+let ws = null;
+let reconnectTimer = null;
+
+function appendLog(msg) {
+  const time = new Date().toLocaleTimeString();
+  const div = document.createElement('div');
+  div.textContent = `[${time}] ${msg}`;
+  logContainer.insertBefore(div, logContainer.firstChild);
+  if (logContainer.children.length > 20) logContainer.removeChild(logContainer.lastChild);
+}
+
+function send(obj) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(obj));
+  }
+}
+
+// ── Audio Spectrum Visualizer (32 Bandes @ 20 FPS) ───────────────────────────
+const audioCanvas = document.getElementById('audio-canvas');
+let audioCtx2d = null;
+
+function drawAudioSpectrum(data) {
+  const canvas = document.getElementById('audio-canvas');
+  if (!canvas || !data || !Array.isArray(data)) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  
+  // Ajustement du tampon de pixels à la taille réelle d'affichage (fallback à 300x60 si onglet masqué)
+  const w = canvas.clientWidth || 300;
+  const h = canvas.clientHeight || 60;
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w;
+    canvas.height = h;
+  }
+  
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  const barCount = data.length;
+  const barWidth = canvas.width / barCount;
+  
+  for (let i = 0; i < barCount; i++) {
+    // Calcul de la hauteur proportionnelle au canvas
+    const barHeight = Math.max(2, data[i] * canvas.height * 0.95); 
+    const x = i * barWidth;
+    const y = canvas.height - barHeight;
+    
+    // Dégradé de couleur : Orange (#ff6600) pour le Kick (basses), Violet (#8b5cf6) pour le reste (les variables CSS ne fonctionnent pas dans fillStyle sur mobile)
+    ctx.fillStyle = (i < 4) ? '#ff6600' : '#8b5cf6';
+    ctx.fillRect(x, y, Math.max(1, barWidth - 1), barHeight);
+  }
+}
+
+function connect() {
+  ws = new WebSocket(wsUrl);
+  ws.onopen = () => {
+    statusBadge.textContent = 'ONLINE';
+    statusBadge.className = 'ok';
+    appendLog('WS Connected to ' + host);
+  };
+  ws.onclose = () => {
+    statusBadge.textContent = 'OFFLINE';
+    statusBadge.className = 'err';
+    appendLog('WS Disconnected. Reconnecting...');
+    clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(connect, 2000);
+  };
+  ws.onerror = () => appendLog('WS Network Error');
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'audio_peaks') {
+        drawAudioSpectrum(msg.data);
+      } else if (msg.type === 'sync_state') {
+        const sourceButtons = document.querySelectorAll('#source-grid button');
+        sourceButtons.forEach((btn, idx) => {
+          const isActive = (idx === msg.bgSource);
+          btn.classList.toggle('active', isActive);
+          if (idx === 9) {
+            btn.textContent = isActive ? '⏭️ NEXT IMAGE' : 'IMAGE_DECK';
+          }
+        });
+        // 2. Synchronisation de la grille des filtres
+        const filterButtons = document.querySelectorAll('#filter-grid button');
+        filterButtons.forEach((btn, idx) => {
+          btn.classList.toggle('active', idx === msg.effect);
+        });
+        // 3. Synchronisation de la grille des impacts
+        const impactBtns = document.querySelectorAll('#impact-grid button');
+        impactBtns.forEach((btn, idx) => {
+          btn.classList.toggle('active', idx === msg.impact);
+        });
+        // 4. Synchronisation de la grille de transitions
+        if (msg.transType !== undefined) {
+          const transTypeBtns = document.querySelectorAll('#trans-type-grid button');
+          transTypeBtns.forEach((btn, idx) => {
+            btn.classList.toggle('active', idx === msg.transType);
+          });
+        }
+        // 5. Synchronisation de la durée de transition
+        if (msg.transDur !== undefined) {
+          const durSlider = document.getElementById('trans-dur-slider');
+          const durVal = document.getElementById('trans-dur-val');
+          if (durSlider && durVal) {
+            durSlider.value = msg.transDur;
+            durVal.textContent = msg.transDur.toFixed(1) + ' s';
+          }
+        }
+        // 6. Synchronisation Auto-Switch
+        if (msg.autoSwitch !== undefined) {
+          autoSwitchState = msg.autoSwitch;
+          const asBtn = document.getElementById('btn-autoswitch');
+          if (asBtn) {
+            asBtn.textContent = autoSwitchState ? 'AUTO VISUALS : ON' : 'AUTO VISUALS : OFF';
+            asBtn.classList.toggle('active', autoSwitchState);
+          }
+        }
+        // 7. Synchronisation Auto Drop/Break
+        if (msg.autoMacro !== undefined) {
+          autoMacroState = msg.autoMacro;
+          const amBtn = document.getElementById('btn-automacro');
+          if (amBtn) {
+            amBtn.textContent = autoMacroState ? 'AUTO DROP/BREAK : ON' : 'AUTO DROP/BREAK : OFF';
+            amBtn.classList.toggle('active', autoMacroState);
+          }
+        }
+        // 8. Synchronisation Mode (Break vs Drop)
+        if (msg.mode !== undefined) {
+          const btnBreak = document.getElementById('btn-break');
+          const btnDrop = document.getElementById('btn-drop');
+          if (btnBreak && btnDrop) {
+            btnBreak.classList.toggle('active', msg.mode === 0);
+            btnDrop.classList.toggle('active', msg.mode === 1);
+          }
+        }
+      }
+    } catch (err) {}
+  };
+}
+connect();
+
+// ── Navigation par Onglets Nactifs ───────────────────────────────────────────
+const tabBtns = document.querySelectorAll('.tab-btn');
+const tabPanes = document.querySelectorAll('.tab-pane');
+tabBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    tabBtns.forEach(b => b.classList.remove('active'));
+    tabPanes.forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.target).classList.add('active');
+  });
+});
+
+// ── Commandes Macro ──────────────────────────────────────────────────────────
+document.getElementById('btn-flash').addEventListener('touchstart', (e) => { e.preventDefault(); send({cmd:'flash'}); });
+document.getElementById('btn-break').addEventListener('click', () => { 
+  send({cmd:'set_mode', value:0});
+  autoMacroState = false;
+  const autoMacroBtn = document.getElementById('btn-automacro');
+  if (autoMacroBtn) {
+    autoMacroBtn.textContent = 'AUTO DROP/BREAK : OFF';
+    autoMacroBtn.classList.remove('active');
+  }
+});
+document.getElementById('btn-drop').addEventListener('click', () => { 
+  send({cmd:'set_mode', value:1});
+  autoMacroState = false;
+  const autoMacroBtn = document.getElementById('btn-automacro');
+  if (autoMacroBtn) {
+    autoMacroBtn.textContent = 'AUTO DROP/BREAK : OFF';
+    autoMacroBtn.classList.remove('active');
+  }
+});
+
+// ── Sélection Filtre (0..5) ──────────────────────────────────────────────────
+const filterButtons = document.querySelectorAll('#filter-grid button');
+filterButtons.forEach((btn, idx) => {
+  btn.addEventListener('click', () => {
+    filterButtons.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    send({cmd:'set_effect', value:idx});
+    appendLog(`Flt -> ${btn.textContent}`);
+  });
+});
+
+// ── Sélection Impact (0..3) ──────────────────────────────────────────────────
+const impactButtons = document.querySelectorAll('#impact-grid button');
+impactButtons.forEach((btn, idx) => {
+  btn.addEventListener('click', () => {
+    impactButtons.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    send({cmd:'set_impact', value:idx});
+    appendLog(`Imp -> ${btn.textContent}`);
+  });
+});
+
+// ── Sélection Source (0..8/9) ────────────────────────────────────────────────
+const sourceButtons = document.querySelectorAll('#source-grid button');
+sourceButtons.forEach((btn, idx) => {
+  btn.addEventListener('click', () => {
+    if (idx === 9 && btn.classList.contains('active')) {
+      send({cmd: 'next_deck_img'});
+      appendLog('Deck -> Next Image');
+      return;
+    }
+    sourceButtons.forEach(b => {
+      b.classList.remove('active');
+      if (b.id === 'btn-bg-9') b.textContent = 'IMAGE_DECK';
+    });
+    btn.classList.add('active');
+    if (idx === 9) btn.textContent = '⏭️ NEXT IMAGE';
+    send({cmd:'set_bg_source', value:idx});
+    appendLog(`Src -> ${btn.textContent}`);
+  });
+});
+
+// ── Sélection Transition Matrix ──────────────────────────────────────────────
+const transTypeBtns = document.querySelectorAll('#trans-type-grid button');
+transTypeBtns.forEach((btn, idx) => {
+  btn.addEventListener('click', () => {
+    transTypeBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    send({cmd:'set_trans_type', value:idx});
+    appendLog(`Trans -> ${btn.textContent}`);
+  });
+});
+
+const transDurSlider = document.getElementById('trans-dur-slider');
+const transDurVal = document.getElementById('trans-dur-val');
+transDurSlider.addEventListener('input', () => {
+  const val = parseFloat(transDurSlider.value);
+  transDurVal.textContent = val.toFixed(1) + ' s';
+  send({cmd:'set_trans_duration', value:val});
+});
+
+let autoSwitchState = false;
+const autoSwitchBtn = document.getElementById('btn-autoswitch');
+autoSwitchBtn.addEventListener('click', () => {
+  autoSwitchState = !autoSwitchState;
+  autoSwitchBtn.textContent = autoSwitchState ? 'AUTO VISUALS : ON' : 'AUTO VISUALS : OFF';
+  autoSwitchBtn.classList.toggle('active', autoSwitchState);
+  send({cmd:'set_autoswitch', value:autoSwitchState});
+  appendLog(`AutoSwitch -> ${autoSwitchState ? 'ON' : 'OFF'}`);
+});
+
+let autoMacroState = true;
+const autoMacroBtn = document.getElementById('btn-automacro');
+if (autoMacroBtn) {
+  autoMacroBtn.addEventListener('click', () => {
+    autoMacroState = !autoMacroState;
+    autoMacroBtn.textContent = autoMacroState ? 'AUTO DROP/BREAK : ON' : 'AUTO DROP/BREAK : OFF';
+    autoMacroBtn.classList.toggle('active', autoMacroState);
+    send({cmd:'set_auto_macro', value:autoMacroState});
+    appendLog(`AutoDropBreak -> ${autoMacroState ? 'ON' : 'OFF'}`);
+  });
+}
+
+// ── Sensibilité Z-Score ──────────────────────────────────────────────────────
+const kSlider = document.getElementById('k-slider');
+const kVal = document.getElementById('k-val');
+kSlider.addEventListener('input', () => {
+  const val = parseFloat(kSlider.value);
+  kVal.textContent = val.toFixed(1);
+  send({cmd:'set_zscore_k', value:val});
+});
+
+// ── Module de Gestion des Couleurs (Conversion Hex vers Array RGB 3-Floats) ────
+function hexToNormalizedRgb(hex) {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  return [parseFloat(r.toFixed(3)), parseFloat(g.toFixed(3)), parseFloat(b.toFixed(3))];
+}
+
+['input', 'change'].forEach(evt => {
+  ['break1', 'break2', 'drop1', 'drop2'].forEach(id => {
+    const el = document.getElementById('picker-' + id);
+    if (el) {
+      el.addEventListener(evt, (e) => {
+        const rgb = hexToNormalizedRgb(e.target.value);
+        send({cmd: 'set_color_' + id, value: rgb});
+      });
+    }
+  });
+});
+
+// ── Pad Performance Tactile (Throttling strict à 30ms) ───────────────────────
+const xyContainer = document.getElementById('xy-container');
+const xyCrosshair = document.getElementById('xy-crosshair');
+let lastEmbedTime = 0;
+
+function handleXYTouch(e) {
+  e.preventDefault();
+  const touch = e.touches[0];
+  const rect = xyContainer.getBoundingClientRect();
+  
+  let x = (touch.clientX - rect.left) / rect.width;
+  let y = (touch.clientY - rect.top) / rect.height;
+  x = Math.max(0.0, Math.min(1.0, x));
+  y = Math.max(0.0, Math.min(1.0, y));
+
+  xyCrosshair.style.left = `${x * 100}%`;
+  xyCrosshair.style.top = `${y * 100}%`;
+
+  const now = performance.now();
+  if (now - lastEmbedTime > 30) {
+    send({cmd: 'pad_movement', x: x, y: y});
+    lastEmbedTime = now;
+  }
+}
+xyContainer.addEventListener('touchstart', handleXYTouch);
+xyContainer.addEventListener('touchmove', handleXYTouch);
+
+// ── Streaming Caméra (Bouton Unique Auto-Géré, 12 FPS) ────────────────────────
+const video = document.getElementById('preview');
+const canvas = document.getElementById('capture');
+const ctx = canvas.getContext('2d');
+const fpsBadge = document.getElementById('fps-badge');
+const camSourceBtn = document.getElementById('btn-bg-8');
+const camToggleBtn = document.getElementById('btn-cam-toggle');
+
+let camStream = null;
+let cameraLoop = null;
+let camActive = false;
+let frameCount = 0, lastFpsUpdate = performance.now();
+
+camToggleBtn.addEventListener('click', () => {
+  if (!camActive) startCam();
+  else stopCam();
+});
+
+async function startCam() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    appendLog('Erreur : Accès matériel impossible (HTTP non sécurisé)');
+    return;
+  }
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } }
+    });
+    video.srcObject = camStream;
+    video.style.display = 'block';
+    await video.play();
+    
+    camActive = true;
+    camToggleBtn.textContent = 'STOP CAM';
+    camToggleBtn.style.background = 'var(--red)';
+    
+    appendLog('Stream caméra armé (12 FPS)');
+    camSourceBtn.style.display = 'inline-block';
+    
+    sourceButtons.forEach(b => b.classList.remove('active'));
+    camSourceBtn.classList.add('active');
+    send({cmd: 'set_bg_source', value: 8});
+
+    cameraLoop = setInterval(processAndSendFrame, 1000 / 12);
+  } catch (err) {
+    appendLog('Échec initialisation caméra');
+  }
+}
+
+function stopCam() {
+  if (cameraLoop) { clearInterval(cameraLoop); cameraLoop = null; }
+  if (camStream) { camStream.getTracks().forEach(track => track.stop()); camStream = null; }
+  video.srcObject = null;
+  video.style.display = 'none';
+  fpsBadge.textContent = '-- FPS';
+  camSourceBtn.style.display = 'none';
+  
+  camActive = false;
+  camToggleBtn.textContent = 'START CAM';
+  camToggleBtn.style.background = 'var(--dark-grey)';
+  
+  sourceButtons.forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-bg-0').classList.add('active');
+  send({cmd: 'stop_camera'});
+  send({cmd: 'set_bg_source', value: 0});
+  appendLog('Stream caméra désactivé');
+}
+
+function processAndSendFrame() {
+  if (!camStream || ws.readyState !== WebSocket.OPEN || video.readyState < 2) return;
+
+  const width = 320, height = 240;
+  canvas.width = width;
+  canvas.height = height;
+  ctx.drawImage(video, 0, 0, width, height);
+
+  canvas.toBlob(blob => {
+    if (!blob) return;
+    const r = new FileReader();
+    r.onloadend = () => {
+      send({cmd: 'camera_frame', data: r.result.split(',')[1]});
+      frameCount++;
+      const now = performance.now();
+      if (now - lastFpsUpdate >= 1000) {
+        fpsBadge.textContent = `${frameCount} FPS`;
+        frameCount = 0;
+        lastFpsUpdate = now;
+      }
+    };
+    r.readAsDataURL(blob);
+  }, 'image/jpeg', 0.65);
+}
+</script>
+</body>
+</html>
