@@ -188,6 +188,9 @@ bool WebServer::start(VJState& state, uint16_t port) {
                 } else if (cmd == "set_autoswitch") {
                     bool as = msg.value("value", false);
                     state.netAutoSwitchEnabled.store(as, std::memory_order_relaxed);
+                } else if (cmd == "set_auto_visual") {
+                    bool av = msg.value("value", false);
+                    state.netAutoVisualSwitchEnabled.store(av, std::memory_order_relaxed);
                 } else if (cmd == "set_autoflash") {
                     bool af = msg.value("value", true);
                     state.netAutoFlashEnabled.store(af, std::memory_order_relaxed);

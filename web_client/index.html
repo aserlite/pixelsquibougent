@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no"/>
 <meta name="theme-color" content="#000000"/>
-<title>VJ Remote Control Pro</title>
+<title>VJ Remote Control Pro v0.7.2</title>
 <style>
   :root {
     --bg: #000000;
@@ -181,7 +181,7 @@
 <body>
 
 <header>
-  <h1>[VJ_ENGINE_REMOTE_v0.6.3]</h1>
+  <h1>[VJ_ENGINE_REMOTE_v0.7.2]</h1>
   <span id="status" class="err">OFFLINE</span>
 </header>
 
@@ -193,7 +193,7 @@
 
 <div class="tab-nav">
   <div class="tab-btn active" data-target="tab-routing">01_ROUTING</div>
-  <div class="tab-btn" data-target="tab-transitions">02_TRANSITIONS</div>
+  <div class="tab-btn" data-target="tab-transitions">02_AUTOMATION</div>
   <div class="tab-btn" data-target="tab-setup">03_SETUP</div>
 </div>
 
@@ -262,12 +262,11 @@
         <input type="range" id="trans-dur-slider" min="0" max="1.0" step="0.1" value="0.3"/>
       </div>
 
-      <h2 style="margin-top: 8px;">02_MACRO_STRUCTURE_LOOP</h2>
-      <div style="display: flex; gap: 6px; flex-shrink: 0; margin-bottom: 6px;">
-        <button id="btn-autoswitch" style="flex: 1; background: var(--dark-grey); padding: 12px;">AUTO-STRUCTURE LOOP : OFF</button>
-        <button id="btn-automacro" class="active" style="flex: 1; background: var(--dark-grey); padding: 12px;">AUTO DROP/BREAK : ON</button>
-      </div>
-      <button id="btn-autoflash" class="active" style="width: 100%; padding: 12px; margin-bottom: 6px;">AUTO-KICK FLASH : ON</button>
+      <h2 style="margin-top: 8px;">02_AUTOMATION_&_LOOP</h2>
+      <button id="btn-autovisual" style="width: 100%; background: var(--dark-grey); padding: 12px; margin-bottom: 6px;">AUTO VISUALS & FILTERS : OFF</button>
+      <button id="btn-autoflash" class="active" style="width: 100%; background: var(--dark-grey); padding: 12px; margin-bottom: 6px;">AUTO-KICK FLASH : ON</button>
+      <button id="btn-automacro" class="active" style="width: 100%; background: var(--dark-grey); padding: 12px; margin-bottom: 6px;">AUTO DROP/BREAK (VIA AUDIO) : ON</button>
+      <button id="btn-autoswitch" style="width: 100%; background: var(--dark-grey); padding: 12px; margin-bottom: 6px;">AUTO-STRUCTURE LOOP (GRID-SYNC) : OFF</button>
       <div class="slider-box" style="margin-top: 8px;">
         <div class="slider-header" style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-dim);">
           <span>KICK ACCUMULATOR GRID</span>
@@ -461,11 +460,19 @@ function connect() {
           }
         }
         // 6. Synchronisation Auto-Switch
+        if (msg.autoVisual !== undefined) {
+          autoVisualState = msg.autoVisual;
+          const avBtn = document.getElementById('btn-autovisual');
+          if (avBtn) {
+            avBtn.textContent = autoVisualState ? 'AUTO VISUALS & FILTERS : ON' : 'AUTO VISUALS & FILTERS : OFF';
+            avBtn.classList.toggle('active', autoVisualState);
+          }
+        }
         if (msg.autoSwitch !== undefined) {
           autoSwitchState = msg.autoSwitch;
           const asBtn = document.getElementById('btn-autoswitch');
           if (asBtn) {
-            asBtn.textContent = autoSwitchState ? 'AUTO-STRUCTURE LOOP : ON' : 'AUTO-STRUCTURE LOOP : OFF';
+            asBtn.textContent = autoSwitchState ? 'AUTO-STRUCTURE LOOP (GRID-SYNC) : ON' : 'AUTO-STRUCTURE LOOP (GRID-SYNC) : OFF';
             asBtn.classList.toggle('active', autoSwitchState);
           }
         }
@@ -489,9 +496,22 @@ function connect() {
         if (msg.autoMacro !== undefined) {
           autoMacroState = msg.autoMacro;
           const amBtn = document.getElementById('btn-automacro');
+          const asBtn = document.getElementById('btn-autoswitch');
+          const ktSlider = document.getElementById('kick-target-slider');
           if (amBtn) {
-            amBtn.textContent = autoMacroState ? 'AUTO DROP/BREAK : ON' : 'AUTO DROP/BREAK : OFF';
+            amBtn.textContent = autoMacroState ? 'AUTO DROP/BREAK (VIA AUDIO) : ON' : 'AUTO DROP/BREAK (VIA AUDIO) : OFF';
             amBtn.classList.toggle('active', autoMacroState);
+          }
+          if (asBtn && ktSlider) {
+            asBtn.disabled = !autoMacroState;
+            asBtn.style.opacity = autoMacroState ? '1' : '0.4';
+            ktSlider.disabled = !autoMacroState;
+            ktSlider.style.opacity = autoMacroState ? '1' : '0.4';
+            if (!autoMacroState && autoSwitchState) {
+              autoSwitchState = false;
+              asBtn.textContent = 'AUTO-STRUCTURE LOOP (GRID-SYNC) : OFF';
+              asBtn.classList.remove('active');
+            }
           }
         }
         // 8. Synchronisation Mode (Break vs Drop)
@@ -603,11 +623,24 @@ transDurSlider.addEventListener('input', () => {
   send({cmd:'set_trans_duration', value:val});
 });
 
+let autoVisualState = false;
+const autoVisualBtn = document.getElementById('btn-autovisual');
+if (autoVisualBtn) {
+  autoVisualBtn.addEventListener('click', () => {
+    autoVisualState = !autoVisualState;
+    autoVisualBtn.textContent = autoVisualState ? 'AUTO VISUALS & FILTERS : ON' : 'AUTO VISUALS & FILTERS : OFF';
+    autoVisualBtn.classList.toggle('active', autoVisualState);
+    send({cmd:'set_auto_visual', value:autoVisualState});
+    appendLog(`AutoVisual -> ${autoVisualState ? 'ON' : 'OFF'}`);
+  });
+}
+
 let autoSwitchState = false;
 const autoSwitchBtn = document.getElementById('btn-autoswitch');
 autoSwitchBtn.addEventListener('click', () => {
+  if (!autoMacroState) return;
   autoSwitchState = !autoSwitchState;
-  autoSwitchBtn.textContent = autoSwitchState ? 'AUTO-STRUCTURE LOOP : ON' : 'AUTO-STRUCTURE LOOP : OFF';
+  autoSwitchBtn.textContent = autoSwitchState ? 'AUTO-STRUCTURE LOOP (GRID-SYNC) : ON' : 'AUTO-STRUCTURE LOOP (GRID-SYNC) : OFF';
   autoSwitchBtn.classList.toggle('active', autoSwitchState);
   send({cmd:'set_autoswitch', value:autoSwitchState});
   appendLog(`AutoSwitch -> ${autoSwitchState ? 'ON' : 'OFF'}`);
@@ -640,9 +673,23 @@ const autoMacroBtn = document.getElementById('btn-automacro');
 if (autoMacroBtn) {
   autoMacroBtn.addEventListener('click', () => {
     autoMacroState = !autoMacroState;
-    autoMacroBtn.textContent = autoMacroState ? 'AUTO DROP/BREAK : ON' : 'AUTO DROP/BREAK : OFF';
+    autoMacroBtn.textContent = autoMacroState ? 'AUTO DROP/BREAK (VIA AUDIO) : ON' : 'AUTO DROP/BREAK (VIA AUDIO) : OFF';
     autoMacroBtn.classList.toggle('active', autoMacroState);
     send({cmd:'set_auto_macro', value:autoMacroState});
+    const asBtn = document.getElementById('btn-autoswitch');
+    const ktSlider = document.getElementById('kick-target-slider');
+    if (asBtn && ktSlider) {
+      asBtn.disabled = !autoMacroState;
+      asBtn.style.opacity = autoMacroState ? '1' : '0.4';
+      ktSlider.disabled = !autoMacroState;
+      ktSlider.style.opacity = autoMacroState ? '1' : '0.4';
+      if (!autoMacroState && autoSwitchState) {
+        autoSwitchState = false;
+        asBtn.textContent = 'AUTO-STRUCTURE LOOP (GRID-SYNC) : OFF';
+        asBtn.classList.remove('active');
+        send({cmd:'set_autoswitch', value:false});
+      }
+    }
     appendLog(`AutoDropBreak -> ${autoMacroState ? 'ON' : 'OFF'}`);
   });
 }

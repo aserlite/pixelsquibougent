@@ -99,6 +99,9 @@ void Interface::render(VJState& state) {
     if (ImGui::Button("Trigger Kick Flash", {-1.0f, 28.0f})) {
         state.flashIntensity = 1.0f;
     }
+    if (ImGui::Checkbox("Auto-Flash Enabled", &state.autoFlashEnabled)) {
+        state.netAutoFlashEnabled.store(state.autoFlashEnabled, std::memory_order_relaxed);
+    }
     ImGui::Text("Flash Output Level:");
     ImGui::PushStyleColor(ImGuiCol_PlotHistogram, {0.72f, 0.45f, 1.00f, 1.0f});
     ImGui::ProgressBar(state.flashIntensity, {-1.0f, 0.0f}, "");
@@ -230,27 +233,19 @@ void Interface::render(VJState& state) {
         ImGui::TextColored({0.7f, 0.4f, 1.0f, 1.0f}, "TRANSITION: %.0f%%", state.transitionProgress * 100.0f);
     }
 
-    ImGui::SeparatorText("Macro Structure & Auto-Flash");
-    if (ImGui::Checkbox("Auto-Flash Enabled", &state.autoFlashEnabled)) {
-        state.netAutoFlashEnabled.store(state.autoFlashEnabled, std::memory_order_relaxed);
+    ImGui::SeparatorText("Auto-Switch Visuals & Filters");
+    if (ImGui::Checkbox("Auto-Visuals Enabled", &state.autoVisualSwitchEnabled)) {
+        state.netAutoVisualSwitchEnabled.store(state.autoVisualSwitchEnabled, std::memory_order_relaxed);
     }
-    if (ImGui::Checkbox("Auto-Structure Loop (Grid-Sync)", &state.autoSwitchEnabled)) {
-        state.netAutoSwitchEnabled.store(state.autoSwitchEnabled, std::memory_order_relaxed);
-    }
-    if (state.autoSwitchEnabled) {
+    if (state.autoVisualSwitchEnabled) {
         ImGui::SetNextItemWidth(180.0f);
-        int stepTarget = state.kickTarget;
-        if (ImGui::SliderInt("Kick Target", &stepTarget, 8, 64)) {
-            stepTarget = std::clamp(((stepTarget + 4) / 8) * 8, 8, 64);
-            state.kickTarget = stepTarget;
-            state.netKickTarget.store(stepTarget, std::memory_order_relaxed);
+        ImGui::SliderFloat("Interval (s)", &state.autoVisualSwitchInterval, 2.0f, 30.0f, "%.1f s");
+        ImGui::SameLine();
+        if (state.autoVisualSwitchArmed) {
+            ImGui::TextColored({1.0f, 0.85f, 0.1f, 1.0f}, "ARM");
+        } else {
+            ImGui::Text("%.1f / %.1fs", state.autoVisualSwitchTimer, state.autoVisualSwitchInterval);
         }
-        char progressBuf[64];
-        snprintf(progressBuf, sizeof(progressBuf), "%d / %d Kicks", state.kickCounter, state.kickTarget);
-        float progressFraction = (state.kickTarget > 0) ? static_cast<float>(state.kickCounter) / static_cast<float>(state.kickTarget) : 0.0f;
-        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, {0.72f, 0.45f, 1.00f, 1.0f});
-        ImGui::ProgressBar(progressFraction, {-1.0f, 0.0f}, progressBuf);
-        ImGui::PopStyleColor();
     }
 
     ImGui::SeparatorText("MP3 Hot-Reload");
@@ -333,11 +328,33 @@ void Interface::render(VJState& state) {
 
     ImGui::Checkbox("Auto-switch via Audio", &state.autoMacroMode);
     if (!state.autoMacroMode) {
+        state.autoSwitchEnabled = false;
+        state.netAutoSwitchEnabled.store(false, std::memory_order_relaxed);
         ImGui::SameLine();
         if (ImGui::RadioButton("BREAK", state.macroMode == 0)) { state.macroMode = 0; state.kickCounter = 0; }
         ImGui::SameLine();
         if (ImGui::RadioButton("DROP",  state.macroMode == 1)) { state.macroMode = 1; state.kickCounter = 0; }
     }
+    if (!state.autoMacroMode) ImGui::BeginDisabled();
+    if (ImGui::Checkbox("Auto-Structure Loop (Grid-Sync)", &state.autoSwitchEnabled)) {
+        state.netAutoSwitchEnabled.store(state.autoSwitchEnabled, std::memory_order_relaxed);
+    }
+    if (state.autoSwitchEnabled) {
+        ImGui::SetNextItemWidth(180.0f);
+        int stepTarget = state.kickTarget;
+        if (ImGui::SliderInt("Kick Target", &stepTarget, 8, 64)) {
+            stepTarget = std::clamp(((stepTarget + 4) / 8) * 8, 8, 64);
+            state.kickTarget = stepTarget;
+            state.netKickTarget.store(stepTarget, std::memory_order_relaxed);
+        }
+        char progressBuf[64];
+        snprintf(progressBuf, sizeof(progressBuf), "%d / %d Kicks", state.kickCounter, state.kickTarget);
+        float progressFraction = (state.kickTarget > 0) ? static_cast<float>(state.kickCounter) / static_cast<float>(state.kickTarget) : 0.0f;
+        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, {0.72f, 0.45f, 1.00f, 1.0f});
+        ImGui::ProgressBar(progressFraction, {-1.0f, 0.0f}, progressBuf);
+        ImGui::PopStyleColor();
+    }
+    if (!state.autoMacroMode) ImGui::EndDisabled();
 
     ImGui::SeparatorText("Z-Score Impact Detection");
     if (ImGui::SliderFloat("Threshold k (sigma)", &state.zScoreK, 1.0f, 5.0f)) {
