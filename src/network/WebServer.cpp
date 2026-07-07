@@ -16,6 +16,7 @@
 #include <nlohmann/json.hpp>
 #include <stb_image.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -186,7 +187,14 @@ bool WebServer::start(VJState& state, uint16_t port) {
                     }
                 } else if (cmd == "set_autoswitch") {
                     bool as = msg.value("value", false);
-                    state.netAutoSwitch.store(as ? 1 : 0, std::memory_order_relaxed);
+                    state.netAutoSwitchEnabled.store(as, std::memory_order_relaxed);
+                } else if (cmd == "set_autoflash") {
+                    bool af = msg.value("value", true);
+                    state.netAutoFlashEnabled.store(af, std::memory_order_relaxed);
+                } else if (cmd == "set_kick_target") {
+                    int kt = msg.value("value", 32);
+                    kt = std::clamp(kt, 8, 64);
+                    state.netKickTarget.store(kt, std::memory_order_relaxed);
                 } else if (cmd == "stop_camera") {
                     state.cameraActive.store(false, std::memory_order_relaxed);
                 } else if (cmd == "flash") {

@@ -58,10 +58,10 @@ struct VJState {
     float padX = 0.5f;
     float padY = 0.5f;
 
-    bool  autoSwitchEnabled  = false;
-    float autoSwitchInterval = 8.0f;
-    float autoSwitchTimer    = 0.0f;
-    bool  autoSwitchArmed    = false;
+    bool autoFlashEnabled  = true;
+    bool autoSwitchEnabled = false;
+    int  kickTarget        = 32;
+    int  kickCounter       = 0;
 
     char        pendingMp3Path[512]   = {};
     bool        mp3ReloadRequested    = false;
@@ -111,7 +111,9 @@ struct VJState {
     std::atomic<int>               netBgSource        {-1};
     std::atomic<float>             netTransDuration   {0.3f};
     std::atomic<int>               netTransType       {1};
-    std::atomic<int>               netAutoSwitch      {-1};
+    std::atomic<bool>              netAutoFlashEnabled{true};
+    std::atomic<bool>              netAutoSwitchEnabled{false};
+    std::atomic<int>               netKickTarget      {32};
     std::atomic<int>               netAutoMacro       {-1};
     std::atomic<float>             netPadX            {0.5f};
     std::atomic<float>             netPadY            {0.5f};

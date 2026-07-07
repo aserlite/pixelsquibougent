@@ -30,39 +30,48 @@ struct EngineOrchestrator::Impl {
 
     bool audioOk = false;
 
-    int   lastSyncBg         = 0;
-    int   lastSyncEffect     = 0;
-    int   lastSyncImpact     = 0;
-    int   lastSyncTransType  = 0;
-    float lastSyncTransDur   = 0.0f;
-    bool  lastSyncAutoSwitch = false;
-    bool  lastSyncAutoMacro  = false;
-    int   lastSyncMode       = 0;
+    int   lastSyncBg          = 0;
+    int   lastSyncEffect      = 0;
+    int   lastSyncImpact      = 0;
+    int   lastSyncTransType   = 0;
+    float lastSyncTransDur    = 0.0f;
+    bool  lastSyncAutoSwitch  = false;
+    bool  lastSyncAutoFlash   = true;
+    int   lastSyncKickTarget  = 32;
+    int   lastSyncKickCounter = 0;
+    bool  lastSyncAutoMacro   = false;
+    int   lastSyncMode        = 0;
 
     void syncSnapshot() {
-        lastSyncBg         = state.isTransitioning ? state.targetBgSourceIndex : state.bgSourceIndex;
-        lastSyncEffect     = state.effectIndex;
-        lastSyncImpact     = state.impactIndex;
-        lastSyncTransType  = state.transitionType;
-        lastSyncTransDur   = state.transitionDuration;
-        lastSyncAutoSwitch = state.autoSwitchEnabled;
-        lastSyncAutoMacro  = state.autoMacroMode;
-        lastSyncMode       = state.macroMode;
+        lastSyncBg          = state.isTransitioning ? state.targetBgSourceIndex : state.bgSourceIndex;
+        lastSyncEffect      = state.effectIndex;
+        lastSyncImpact      = state.impactIndex;
+        lastSyncTransType   = state.transitionType;
+        lastSyncTransDur    = state.transitionDuration;
+        lastSyncAutoSwitch  = state.autoSwitchEnabled;
+        lastSyncAutoFlash   = state.autoFlashEnabled;
+        lastSyncKickTarget  = state.kickTarget;
+        lastSyncKickCounter = state.kickCounter;
+        lastSyncAutoMacro   = state.autoMacroMode;
+        lastSyncMode        = state.macroMode;
     }
 
     void sendSyncState() {
         json j;
-        j["type"]       = "sync_state";
-        j["bgSource"]   = state.isTransitioning ? state.targetBgSourceIndex : state.bgSourceIndex;
-        j["effect"]     = state.effectIndex;
-        j["impact"]     = state.impactIndex;
-        j["transType"]  = state.transitionType;
-        j["transDur"]   = state.transitionDuration;
-        j["autoSwitch"] = state.autoSwitchEnabled;
-        j["autoMacro"]  = state.autoMacroMode;
-        j["mode"]       = state.macroMode;
-        j["hasDeck"]    = state.hasDeckImages;
-        j["deckIdx"]    = state.activeDeckIndex;
+        j["type"]        = "sync_state";
+        j["bgSource"]    = state.isTransitioning ? state.targetBgSourceIndex : state.bgSourceIndex;
+        j["effect"]      = state.effectIndex;
+        j["impact"]      = state.impactIndex;
+        j["transType"]   = state.transitionType;
+        j["transDur"]    = state.transitionDuration;
+        j["autoSwitch"]  = state.autoSwitchEnabled;
+        j["autoFlash"]   = state.autoFlashEnabled;
+        j["kickTarget"]  = state.kickTarget;
+        j["kickCounter"] = state.kickCounter;
+        j["autoMacro"]   = state.autoMacroMode;
+        j["mode"]        = state.macroMode;
+        j["hasDeck"]     = state.hasDeckImages;
+        j["deckIdx"]     = state.activeDeckIndex;
         server.broadcast(j.dump());
         syncSnapshot();
     }
@@ -75,11 +84,18 @@ struct EngineOrchestrator::Impl {
             || state.transitionType != lastSyncTransType
             || std::abs(state.transitionDuration - lastSyncTransDur) > 0.01f
             || state.autoSwitchEnabled != lastSyncAutoSwitch
+            || state.autoFlashEnabled  != lastSyncAutoFlash
+            || state.kickTarget        != lastSyncKickTarget
+            || state.kickCounter       != lastSyncKickCounter
             || state.autoMacroMode     != lastSyncAutoMacro
             || state.macroMode         != lastSyncMode;
     }
 
     void consumeNetworkCommands() {
+        state.autoFlashEnabled  = state.netAutoFlashEnabled.load(std::memory_order_relaxed);
+        state.kickTarget        = state.netKickTarget.load(std::memory_order_relaxed);
+        state.autoSwitchEnabled = state.netAutoSwitchEnabled.load(std::memory_order_relaxed);
+
         if (state.netFlashTrigger.exchange(false, std::memory_order_acq_rel))
             state.flashIntensity = 1.0f;
 
@@ -87,6 +103,7 @@ struct EngineOrchestrator::Impl {
         if (netMode >= 0) {
             state.macroMode     = netMode;
             state.autoMacroMode = false;
+            state.kickCounter   = 0;
             state.netMacroMode.store(-1, std::memory_order_relaxed);
         }
 
@@ -104,9 +121,6 @@ struct EngineOrchestrator::Impl {
 
         int netType = state.netTransType.load(std::memory_order_relaxed);
         if (netType != state.transitionType) state.transitionType = netType;
-
-        int netAS = state.netAutoSwitch.exchange(-1, std::memory_order_acq_rel);
-        if (netAS >= 0) state.autoSwitchEnabled = (netAS == 1);
 
         int netAM = state.netAutoMacro.exchange(-1, std::memory_order_acq_rel);
         if (netAM >= 0) state.autoMacroMode = (netAM == 1);
@@ -189,13 +203,29 @@ struct EngineOrchestrator::Impl {
         audio.clearKick();
 
         const bool kickFired = state.kickDetected || state.zScoreImpact;
-        if (kickFired) state.flashIntensity = 1.0f;
+        if (kickFired) {
+            if (state.autoFlashEnabled) {
+                state.flashIntensity = 1.0f;
+            }
+            if (state.autoSwitchEnabled) {
+                state.kickCounter++;
+                if (state.kickCounter >= state.kickTarget) {
+                    state.macroMode = (state.macroMode == 0) ? 1 : 0;
+                    state.kickCounter = 0;
+                    sendSyncState();
+                }
+            }
+        }
 
         state.kickDetected = false;
         state.zScoreImpact = false;
 
-        audio.setMacroModeOverride(state.macroMode, state.autoMacroMode);
-        if (state.autoMacroMode) state.macroMode = audio.macroMode();
+        if (!state.autoSwitchEnabled) {
+            audio.setMacroModeOverride(state.macroMode, state.autoMacroMode);
+            if (state.autoMacroMode) state.macroMode = audio.macroMode();
+        } else {
+            audio.setMacroModeOverride(state.macroMode, false);
+        }
 
         return kickFired;
     }
@@ -214,36 +244,7 @@ struct EngineOrchestrator::Impl {
         }
     }
 
-    void tickAutoSwitch(double dt, bool kickFired) {
-        if (!state.autoSwitchEnabled || !audioOk) return;
 
-        state.autoSwitchTimer += static_cast<float>(dt);
-
-        if (!state.autoSwitchArmed && state.autoSwitchTimer >= state.autoSwitchInterval) {
-            state.autoSwitchArmed = true;
-            sendSyncState();
-        }
-
-        if (!state.autoSwitchArmed || !kickFired) return;
-
-        constexpr int kMaxBg = 10;
-        int nextBg = (state.bgSourceIndex + 1) % kMaxBg;
-        if (nextBg == 8 && !state.cameraActive.load()) nextBg = 9;
-        if (nextBg == 9 && !state.hasDeckImages) nextBg = 0;
-
-        if (!state.isTransitioning && nextBg != state.bgSourceIndex) {
-            state.targetBgSourceIndex = nextBg;
-            state.isTransitioning     = true;
-            state.transitionProgress  = 0.0f;
-        } else if (!state.isTransitioning) {
-            state.bgSourceIndex = nextBg;
-        }
-
-        state.effectIndex     = (state.effectIndex + 1) % 6;
-        state.autoSwitchTimer = 0.0f;
-        state.autoSwitchArmed = false;
-        sendSyncState();
-    }
 
     void tickDeck(double now, bool kickFired) {
         if (!state.hasDeckImages || state.deckItems.empty()) return;
@@ -385,7 +386,6 @@ void EngineOrchestrator::run() {
 
         const bool kickFired = d.tickAudio();
 
-        d.tickAutoSwitch(dt, kickFired);
         d.tickDeck(now, kickFired);
 
         constexpr float kFlashDecay = 5.5f;

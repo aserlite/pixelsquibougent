@@ -262,10 +262,18 @@
         <input type="range" id="trans-dur-slider" min="0" max="1.0" step="0.1" value="0.3"/>
       </div>
 
-      <h2 style="margin-top: 8px;">02_DROP-SYNC_AUTO-SWITCH</h2>
-      <div style="display: flex; gap: 6px; flex-shrink: 0;">
-        <button id="btn-autoswitch" style="flex: 1; background: var(--dark-grey); padding: 12px;">AUTO VISUALS : OFF</button>
+      <h2 style="margin-top: 8px;">02_MACRO_STRUCTURE_LOOP</h2>
+      <div style="display: flex; gap: 6px; flex-shrink: 0; margin-bottom: 6px;">
+        <button id="btn-autoswitch" style="flex: 1; background: var(--dark-grey); padding: 12px;">AUTO-STRUCTURE LOOP : OFF</button>
         <button id="btn-automacro" class="active" style="flex: 1; background: var(--dark-grey); padding: 12px;">AUTO DROP/BREAK : ON</button>
+      </div>
+      <button id="btn-autoflash" class="active" style="width: 100%; padding: 12px; margin-bottom: 6px;">AUTO-KICK FLASH : ON</button>
+      <div class="slider-box" style="margin-top: 8px;">
+        <div class="slider-header" style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-dim);">
+          <span>KICK ACCUMULATOR GRID</span>
+          <span id="kick-target-val">32 Kicks</span>
+        </div>
+        <input type="range" id="kick-target-slider" min="8" max="64" step="8" value="32" style="width: 100%; margin-top: 4px;"/>
       </div>
     </section>
   </div>
@@ -457,8 +465,24 @@ function connect() {
           autoSwitchState = msg.autoSwitch;
           const asBtn = document.getElementById('btn-autoswitch');
           if (asBtn) {
-            asBtn.textContent = autoSwitchState ? 'AUTO VISUALS : ON' : 'AUTO VISUALS : OFF';
+            asBtn.textContent = autoSwitchState ? 'AUTO-STRUCTURE LOOP : ON' : 'AUTO-STRUCTURE LOOP : OFF';
             asBtn.classList.toggle('active', autoSwitchState);
+          }
+        }
+        if (msg.autoFlash !== undefined) {
+          autoFlashState = msg.autoFlash;
+          const afBtn = document.getElementById('btn-autoflash');
+          if (afBtn) {
+            afBtn.textContent = autoFlashState ? 'AUTO-KICK FLASH : ON' : 'AUTO-KICK FLASH : OFF';
+            afBtn.classList.toggle('active', autoFlashState);
+          }
+        }
+        if (msg.kickTarget !== undefined) {
+          const ktSlider = document.getElementById('kick-target-slider');
+          const ktVal = document.getElementById('kick-target-val');
+          if (ktSlider && ktVal) {
+            ktSlider.value = msg.kickTarget;
+            ktVal.textContent = msg.kickTarget + ' Kicks';
           }
         }
         // 7. Synchronisation Auto Drop/Break
@@ -583,11 +607,33 @@ let autoSwitchState = false;
 const autoSwitchBtn = document.getElementById('btn-autoswitch');
 autoSwitchBtn.addEventListener('click', () => {
   autoSwitchState = !autoSwitchState;
-  autoSwitchBtn.textContent = autoSwitchState ? 'AUTO VISUALS : ON' : 'AUTO VISUALS : OFF';
+  autoSwitchBtn.textContent = autoSwitchState ? 'AUTO-STRUCTURE LOOP : ON' : 'AUTO-STRUCTURE LOOP : OFF';
   autoSwitchBtn.classList.toggle('active', autoSwitchState);
   send({cmd:'set_autoswitch', value:autoSwitchState});
   appendLog(`AutoSwitch -> ${autoSwitchState ? 'ON' : 'OFF'}`);
 });
+
+let autoFlashState = true;
+const autoFlashBtn = document.getElementById('btn-autoflash');
+if (autoFlashBtn) {
+  autoFlashBtn.addEventListener('click', () => {
+    autoFlashState = !autoFlashState;
+    autoFlashBtn.textContent = autoFlashState ? 'AUTO-KICK FLASH : ON' : 'AUTO-KICK FLASH : OFF';
+    autoFlashBtn.classList.toggle('active', autoFlashState);
+    send({cmd:'set_autoflash', value:autoFlashState});
+    appendLog(`AutoFlash -> ${autoFlashState ? 'ON' : 'OFF'}`);
+  });
+}
+
+const kickTargetSlider = document.getElementById('kick-target-slider');
+const kickTargetVal = document.getElementById('kick-target-val');
+if (kickTargetSlider && kickTargetVal) {
+  kickTargetSlider.addEventListener('input', () => {
+    const val = parseInt(kickTargetSlider.value, 10);
+    kickTargetVal.textContent = val + ' Kicks';
+    send({cmd:'set_kick_target', value:val});
+  });
+}
 
 let autoMacroState = true;
 const autoMacroBtn = document.getElementById('btn-automacro');

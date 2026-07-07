@@ -230,19 +230,27 @@ void Interface::render(VJState& state) {
         ImGui::TextColored({0.7f, 0.4f, 1.0f, 1.0f}, "TRANSITION: %.0f%%", state.transitionProgress * 100.0f);
     }
 
-    ImGui::SeparatorText("Drop-Sync Auto-Switch");
-    if (ImGui::Checkbox("Auto-Switch Enabled", &state.autoSwitchEnabled)) {
-        state.netAutoSwitch.store(state.autoSwitchEnabled ? 1 : 0, std::memory_order_relaxed);
+    ImGui::SeparatorText("Macro Structure & Auto-Flash");
+    if (ImGui::Checkbox("Auto-Flash Enabled", &state.autoFlashEnabled)) {
+        state.netAutoFlashEnabled.store(state.autoFlashEnabled, std::memory_order_relaxed);
+    }
+    if (ImGui::Checkbox("Auto-Structure Loop (Grid-Sync)", &state.autoSwitchEnabled)) {
+        state.netAutoSwitchEnabled.store(state.autoSwitchEnabled, std::memory_order_relaxed);
     }
     if (state.autoSwitchEnabled) {
         ImGui::SetNextItemWidth(180.0f);
-        ImGui::SliderFloat("Interval (s)", &state.autoSwitchInterval, 2.0f, 30.0f, "%.1f s");
-        ImGui::SameLine();
-        if (state.autoSwitchArmed) {
-            ImGui::TextColored({1.0f, 0.85f, 0.1f, 1.0f}, "ARM");
-        } else {
-            ImGui::Text("%.1f / %.1fs", state.autoSwitchTimer, state.autoSwitchInterval);
+        int stepTarget = state.kickTarget;
+        if (ImGui::SliderInt("Kick Target", &stepTarget, 8, 64)) {
+            stepTarget = std::clamp(((stepTarget + 4) / 8) * 8, 8, 64);
+            state.kickTarget = stepTarget;
+            state.netKickTarget.store(stepTarget, std::memory_order_relaxed);
         }
+        char progressBuf[64];
+        snprintf(progressBuf, sizeof(progressBuf), "%d / %d Kicks", state.kickCounter, state.kickTarget);
+        float progressFraction = (state.kickTarget > 0) ? static_cast<float>(state.kickCounter) / static_cast<float>(state.kickTarget) : 0.0f;
+        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, {0.72f, 0.45f, 1.00f, 1.0f});
+        ImGui::ProgressBar(progressFraction, {-1.0f, 0.0f}, progressBuf);
+        ImGui::PopStyleColor();
     }
 
     ImGui::SeparatorText("MP3 Hot-Reload");
@@ -306,21 +314,29 @@ void Interface::render(VJState& state) {
     if (state.macroMode == 1) {
         ImGui::PushStyleColor(ImGuiCol_Button, {0.85f, 0.15f, 0.35f, 1.0f});
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {0.95f, 0.25f, 0.45f, 1.0f});
-        ImGui::Button("   DROP MODE [AGRESSIF]   ", {-1.0f, 32.0f});
+        if (ImGui::Button("   DROP MODE [AGRESSIF]   ", {-1.0f, 32.0f})) {
+            state.macroMode = 0;
+            state.kickCounter = 0;
+            state.autoMacroMode = false;
+        }
         ImGui::PopStyleColor(2);
     } else {
         ImGui::PushStyleColor(ImGuiCol_Button, {0.15f, 0.45f, 0.85f, 1.0f});
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, {0.25f, 0.55f, 0.95f, 1.0f});
-        ImGui::Button("   BREAK MODE [CALME]   ", {-1.0f, 32.0f});
+        if (ImGui::Button("   BREAK MODE [CALME]   ", {-1.0f, 32.0f})) {
+            state.macroMode = 1;
+            state.kickCounter = 0;
+            state.autoMacroMode = false;
+        }
         ImGui::PopStyleColor(2);
     }
 
     ImGui::Checkbox("Auto-switch via Audio", &state.autoMacroMode);
     if (!state.autoMacroMode) {
         ImGui::SameLine();
-        if (ImGui::RadioButton("BREAK", state.macroMode == 0)) state.macroMode = 0;
+        if (ImGui::RadioButton("BREAK", state.macroMode == 0)) { state.macroMode = 0; state.kickCounter = 0; }
         ImGui::SameLine();
-        if (ImGui::RadioButton("DROP",  state.macroMode == 1)) state.macroMode = 1;
+        if (ImGui::RadioButton("DROP",  state.macroMode == 1)) { state.macroMode = 1; state.kickCounter = 0; }
     }
 
     ImGui::SeparatorText("Z-Score Impact Detection");
