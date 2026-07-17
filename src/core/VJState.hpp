@@ -18,6 +18,11 @@ struct VJState {
     float flashIntensity = 0.0f;
     float uiFps          = 0.0f;
 
+    bool allowedBgSources[10] = { true, true, true, true, true, true, true, true, true, true };
+    bool allowedEffects[6]    = { true, true, true, true, true, true };
+    bool allowedImpacts[4]    = { true, true, true, true };
+    bool allowedListsDirty    = false;
+
     bool        shaderCompiled = false;
     std::string shaderError;
 

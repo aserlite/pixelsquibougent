@@ -88,67 +88,24 @@ void Interface::render(VJState& state) {
                      ImGuiDockNodeFlags_PassthruCentralNode);
     ImGui::End();
 
-    ImGui::SetNextWindowSize({380.0f, 240.0f}, ImGuiCond_FirstUseEver);
+    auto countAllowed = [](const bool* arr, int n) {
+        int c = 0; for (int i = 0; i < n; i++) if (arr[i]) c++; return c;
+    };
+
+    ImGui::SetNextWindowSize({400.0f, 600.0f}, ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowPos ({20.0f,  20.0f},  ImGuiCond_FirstUseEver);
     ImGui::Begin("VJ Dashboard");
 
     ImGui::SeparatorText("Performance");
     ImGui::Text("FPS  %.1f  (%.2f ms)", state.uiFps, 1000.0f / (state.uiFps + 1e-6f));
-
-    ImGui::SeparatorText("Output & Trigger");
-    if (ImGui::Button("Trigger Kick Flash", {-1.0f, 28.0f})) {
-        state.flashIntensity = 1.0f;
-    }
-    if (ImGui::Checkbox("Auto-Flash Enabled", &state.autoFlashEnabled)) {
-        state.netAutoFlashEnabled.store(state.autoFlashEnabled, std::memory_order_relaxed);
-    }
-    ImGui::Text("Flash Output Level:");
-    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, {0.72f, 0.45f, 1.00f, 1.0f});
-    ImGui::ProgressBar(state.flashIntensity, {-1.0f, 0.0f}, "");
-    ImGui::PopStyleColor();
-
-    ImGui::SeparatorText("Shader Engine");
-    if (state.shaderCompiled) {
-        ImGui::TextColored({0.3f, 0.9f, 0.4f, 1.0f}, "● Active — Hot-Reload Enabled");
-    } else {
-        ImGui::TextColored({1.0f, 0.3f, 0.3f, 1.0f}, "● Error in GLSL syntax!");
-        if (!state.shaderError.empty()) {
-            ImGui::TextWrapped("%s", state.shaderError.c_str());
-        }
+    if (state.shaderCompiled)
+        ImGui::TextColored({0.3f, 0.9f, 0.4f, 1.0f}, "Shader OK — Hot-Reload ON");
+    else {
+        ImGui::TextColored({1.0f, 0.3f, 0.3f, 1.0f}, "Shader Error!");
+        if (!state.shaderError.empty()) ImGui::TextWrapped("%s", state.shaderError.c_str());
     }
 
-    ImGui::SeparatorText("Filter (Etape 2)");
-    const char* filterNames[] = { "0: Raw / Through", "1: Sobel Neon", "2: ASCII Art", "3: Ordered Dither", "4: Halftone Pop-Art", "5: Cross-Hatch" };
-    ImGui::SetNextItemWidth(280.0f);
-    if (ImGui::BeginCombo("Select Filter", filterNames[state.effectIndex])) {
-        for (int i = 0; i < 6; ++i) {
-            bool sel = (state.effectIndex == i);
-            if (ImGui::Selectable(filterNames[i], sel)) state.effectIndex = i;
-            if (sel) ImGui::SetItemDefaultFocus();
-        }
-        ImGui::EndCombo();
-    }
-    if (ImGui::RadioButton("Raw##f",    state.effectIndex == 0)) state.effectIndex = 0;
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Sobel##f",  state.effectIndex == 1)) state.effectIndex = 1;
-    ImGui::SameLine();
-    if (ImGui::RadioButton("ASCII##f",  state.effectIndex == 2)) state.effectIndex = 2;
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Dither##f", state.effectIndex == 3)) state.effectIndex = 3;
-    if (ImGui::RadioButton("Halftone##f", state.effectIndex == 4)) state.effectIndex = 4;
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Cross-Hatch##f", state.effectIndex == 5)) state.effectIndex = 5;
-
-    ImGui::SeparatorText("03_IMPACTS (on Flash/Kick/Drop)");
-    if (ImGui::RadioButton("None##imp",       state.impactIndex == 0)) { state.impactIndex = 0; state.netImpactIndex.store(0, std::memory_order_relaxed); }
-    ImGui::SameLine();
-    if (ImGui::RadioButton("CRT Glitch##imp", state.impactIndex == 1)) { state.impactIndex = 1; state.netImpactIndex.store(1, std::memory_order_relaxed); }
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Pixel Sort##imp", state.impactIndex == 2)) { state.impactIndex = 2; state.netImpactIndex.store(2, std::memory_order_relaxed); }
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Slit-Scan##imp",  state.impactIndex == 3)) { state.impactIndex = 3; state.netImpactIndex.store(3, std::memory_order_relaxed); }
-
-    ImGui::SeparatorText("Source (Etape 1)");
+    ImGui::SeparatorText("Source — Etape 1");
     auto selectBgSource = [&](int idx) {
         if (idx == state.bgSourceIndex && !state.isTransitioning) return;
         if (state.transitionDuration > 0.0f && state.transitionType > 0 && !state.isTransitioning && idx != state.bgSourceIndex) {
@@ -160,10 +117,12 @@ void Interface::render(VJState& state) {
             state.isTransitioning = false;
         }
     };
-    const char* bgNames[] = { "0: Noise Field", "1: Curl Noise (Fluid)", "2: Raymarching Tunnel", "3: Metaballs 3D", "4: Fluid Morphing Blob (SDF)", "5: Reaction-Diffusion", "6: Clifford Attractor", "7: Voronoi Tessellation", "8: Camera Stream (Live)", "9: Image Deck (Static Pool)" };
+    const char* bgNames[]      = { "0: Noise Field", "1: Curl Noise (Fluid)", "2: Raymarching Tunnel", "3: Metaballs 3D", "4: Fluid Morphing Blob", "5: Reaction-Diffusion", "6: Clifford Attractor", "7: Voronoi Tessellation", "8: Camera Stream (Live)", "9: Image Deck" };
+    const char* bgShortNames[] = { "Noise", "Curl", "Tunnel", "Metaballs", "Fluid", "React-Diff", "Clifford", "Voronoi", "Camera", "Img Deck" };
     ImGui::SetNextItemWidth(280.0f);
-    if (ImGui::BeginCombo("Select Source", bgNames[state.bgSourceIndex])) {
+    if (ImGui::BeginCombo("##srccombo", bgNames[state.bgSourceIndex])) {
         for (int i = 0; i < 10; ++i) {
+            if (!state.allowedBgSources[i]) continue;
             if (i == 8 && !state.cameraActive.load()) continue;
             bool sel = (state.bgSourceIndex == i);
             if (ImGui::Selectable(bgNames[i], sel)) selectBgSource(i);
@@ -171,84 +130,151 @@ void Interface::render(VJState& state) {
         }
         ImGui::EndCombo();
     }
-    if (ImGui::RadioButton("Noise##bg",    state.bgSourceIndex == 0)) selectBgSource(0);
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Curl##bg",     state.bgSourceIndex == 1)) selectBgSource(1);
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Tunnel##bg",   state.bgSourceIndex == 2)) selectBgSource(2);
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Metaballs##bg",state.bgSourceIndex == 3)) selectBgSource(3);
-    if (ImGui::RadioButton("Fluid Blob##bg", state.bgSourceIndex == 4)) selectBgSource(4);
-    ImGui::SameLine();
-    if (ImGui::RadioButton("React-Diff##bg", state.bgSourceIndex == 5)) selectBgSource(5);
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Clifford##bg", state.bgSourceIndex == 6)) selectBgSource(6);
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Voronoi##bg",  state.bgSourceIndex == 7)) selectBgSource(7);
-    if (state.cameraActive.load()) {
-        if (ImGui::RadioButton("Camera##bg", state.bgSourceIndex == 8)) selectBgSource(8);
-        ImGui::SameLine();
+    { int col = 0;
+      for (int i = 0; i < 10; ++i) {
+        if (!state.allowedBgSources[i]) continue;
+        if (i == 8 && !state.cameraActive.load()) continue;
+        if (col > 0 && col % 4 != 0) ImGui::SameLine();
+        char lbl[32]; snprintf(lbl, sizeof(lbl), "%s##bg%d", bgShortNames[i], i);
+        if (ImGui::RadioButton(lbl, state.bgSourceIndex == i)) selectBgSource(i);
+        ++col;
+      }
     }
-    if (ImGui::RadioButton("Image Deck##bg", state.bgSourceIndex == 9)) selectBgSource(9);
-    if (state.bgSourceIndex == 9) {
-        ImGui::SameLine();
-        if (ImGui::Button("Next Image##deck")) {
-            state.netTriggerRandomImg.store(true, std::memory_order_release);
-        }
-    }
+    if (state.bgSourceIndex == 9) { ImGui::SameLine(); if (ImGui::Button("Next##deck")) state.netTriggerRandomImg.store(true, std::memory_order_release); }
 
-    ImGui::SeparatorText("Transitions");
-    const char* transNames[] = { "0: Cut (Direct)", "1: Fade (Linear)", "2: Wipe (Horizontal)", "3: Glitch Displacement", "4: Luma Melt", "5: Radial Wipe", "6: Zoom Cross" };
+    ImGui::SeparatorText("Filtre — Etape 2");
+    const char* filterNames[]   = { "0: Raw / Through", "1: Sobel Neon", "2: ASCII Art", "3: Ordered Dither", "4: Halftone Pop-Art", "5: Cross-Hatch" };
+    const char* fltShortNames[] = { "Raw", "Sobel", "ASCII", "Dither", "Halftone", "X-Hatch" };
     ImGui::SetNextItemWidth(280.0f);
-    if (ImGui::BeginCombo("Transition Type", transNames[state.transitionType])) {
-        for (int i = 0; i < 7; ++i) {
-            bool sel = (state.transitionType == i);
-            if (ImGui::Selectable(transNames[i], sel)) {
-                state.transitionType = i;
-                state.netTransType.store(i, std::memory_order_relaxed);
-            }
+    if (ImGui::BeginCombo("##fltcombo", filterNames[state.effectIndex])) {
+        for (int i = 0; i < 6; ++i) {
+            if (!state.allowedEffects[i]) continue;
+            bool sel = (state.effectIndex == i);
+            if (ImGui::Selectable(filterNames[i], sel)) state.effectIndex = i;
             if (sel) ImGui::SetItemDefaultFocus();
         }
         ImGui::EndCombo();
     }
-    if (ImGui::RadioButton("Cut##tr",    state.transitionType == 0)) { state.transitionType = 0; state.netTransType.store(0, std::memory_order_relaxed); }
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Fade##tr",   state.transitionType == 1)) { state.transitionType = 1; state.netTransType.store(1, std::memory_order_relaxed); }
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Wipe##tr",   state.transitionType == 2)) { state.transitionType = 2; state.netTransType.store(2, std::memory_order_relaxed); }
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Glitch##tr", state.transitionType == 3)) { state.transitionType = 3; state.netTransType.store(3, std::memory_order_relaxed); }
-    if (ImGui::RadioButton("Luma##tr",   state.transitionType == 4)) { state.transitionType = 4; state.netTransType.store(4, std::memory_order_relaxed); }
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Radial##tr", state.transitionType == 5)) { state.transitionType = 5; state.netTransType.store(5, std::memory_order_relaxed); }
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Zoom##tr",   state.transitionType == 6)) { state.transitionType = 6; state.netTransType.store(6, std::memory_order_relaxed); }
+    { int col = 0;
+      for (int i = 0; i < 6; ++i) {
+        if (!state.allowedEffects[i]) continue;
+        if (col > 0 && col % 3 != 0) ImGui::SameLine();
+        char lbl[32]; snprintf(lbl, sizeof(lbl), "%s##f%d", fltShortNames[i], i);
+        if (ImGui::RadioButton(lbl, state.effectIndex == i)) state.effectIndex = i;
+        ++col;
+      }
+    }
 
+    ImGui::SeparatorText("Impact — Etape 3 (Flash/Kick)");
+    const char* impNames[] = { "None", "CRT Glitch", "Pixel Sort", "Slit-Scan" };
+    { int col = 0;
+      for (int i = 0; i < 4; ++i) {
+        if (!state.allowedImpacts[i]) continue;
+        if (col > 0) ImGui::SameLine();
+        char lbl[32]; snprintf(lbl, sizeof(lbl), "%s##imp%d", impNames[i], i);
+        if (ImGui::RadioButton(lbl, state.impactIndex == i)) { state.impactIndex = i; state.netImpactIndex.store(i, std::memory_order_relaxed); }
+        ++col;
+      }
+    }
+
+    ImGui::SeparatorText("Transitions");
+    const char* transNames[] = { "0: Cut", "1: Fade", "2: Wipe", "3: Glitch", "4: Luma Melt", "5: Radial", "6: Zoom Cross" };
+    const char* trShort[]    = { "Cut", "Fade", "Wipe", "Glitch", "Luma", "Radial", "Zoom" };
+    ImGui::SetNextItemWidth(240.0f);
+    if (ImGui::BeginCombo("##trcombo", transNames[state.transitionType])) {
+        for (int i = 0; i < 7; ++i) {
+            bool sel = (state.transitionType == i);
+            if (ImGui::Selectable(transNames[i], sel)) { state.transitionType = i; state.netTransType.store(i, std::memory_order_relaxed); }
+            if (sel) ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+    for (int i = 0; i < 7; ++i) {
+        if (i > 0 && i % 4 != 0) ImGui::SameLine();
+        char lbl[32]; snprintf(lbl, sizeof(lbl), "%s##tr%d", trShort[i], i);
+        if (ImGui::RadioButton(lbl, state.transitionType == i)) { state.transitionType = i; state.netTransType.store(i, std::memory_order_relaxed); }
+    }
     ImGui::SetNextItemWidth(180.0f);
-    if (ImGui::SliderFloat("Duration (s)", &state.transitionDuration, 0.0f, 1.0f, "%.1f s")) {
+    if (ImGui::SliderFloat("Duration (s)", &state.transitionDuration, 0.0f, 1.0f, "%.1f s"))
         state.netTransDuration.store(state.transitionDuration, std::memory_order_relaxed);
-    }
-    if (state.isTransitioning) {
-        ImGui::SameLine();
-        ImGui::TextColored({0.7f, 0.4f, 1.0f, 1.0f}, "TRANSITION: %.0f%%", state.transitionProgress * 100.0f);
-    }
+    if (state.isTransitioning) { ImGui::SameLine(); ImGui::TextColored({0.7f, 0.4f, 1.0f, 1.0f}, "TRANSITION: %.0f%%", state.transitionProgress * 100.0f); }
 
-    ImGui::SeparatorText("Auto-Switch Visuals & Filters");
-    if (ImGui::Checkbox("Auto-Visuals Enabled", &state.autoVisualSwitchEnabled)) {
+    ImGui::SeparatorText("Auto-Switch Visuals & Filtres");
+    if (ImGui::Checkbox("Auto-Visuals Enabled", &state.autoVisualSwitchEnabled))
         state.netAutoVisualSwitchEnabled.store(state.autoVisualSwitchEnabled, std::memory_order_relaxed);
-    }
     if (state.autoVisualSwitchEnabled) {
         ImGui::SetNextItemWidth(180.0f);
         ImGui::SliderFloat("Interval (s)", &state.autoVisualSwitchInterval, 2.0f, 30.0f, "%.1f s");
         ImGui::SameLine();
-        if (state.autoVisualSwitchArmed) {
-            ImGui::TextColored({1.0f, 0.85f, 0.1f, 1.0f}, "ARM");
-        } else {
-            ImGui::Text("%.1f / %.1fs", state.autoVisualSwitchTimer, state.autoVisualSwitchInterval);
+        if (state.autoVisualSwitchArmed) ImGui::TextColored({1.0f, 0.85f, 0.1f, 1.0f}, "ARM");
+        else ImGui::Text("%.1f / %.1fs", state.autoVisualSwitchTimer, state.autoVisualSwitchInterval);
+    }
+
+    ImGui::SeparatorText("Output & Flash Trigger");
+    if (ImGui::Button("Trigger Kick Flash", {-1.0f, 28.0f})) state.flashIntensity = 1.0f;
+    if (ImGui::Checkbox("Auto-Flash Enabled", &state.autoFlashEnabled))
+        state.netAutoFlashEnabled.store(state.autoFlashEnabled, std::memory_order_relaxed);
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, {0.72f, 0.45f, 1.00f, 1.0f});
+    ImGui::ProgressBar(state.flashIntensity, {-1.0f, 0.0f}, "");
+    ImGui::PopStyleColor();
+    ImGui::End();
+
+    // ── Visual Allowlist window ────────────────────────────────────────────────
+    ImGui::SetNextWindowSize({320.0f, 420.0f}, ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos ({440.0f,  20.0f}, ImGuiCond_FirstUseEver);
+    ImGui::Begin("Visual Allowlist");
+    ImGui::TextDisabled("Min. 1 element per category.");
+    ImGui::Spacing();
+    ImGui::SeparatorText("Sources BG (Etape 1)");
+    const char* bgAllow[] = { "Noise Field", "Curl Noise", "Tunnel 3D", "Metaballs", "Fluid Blob", "React-Diffusion", "Clifford", "Voronoi", "Camera", "Image Deck" };
+    for (int i = 0; i < 10; ++i) {
+        bool locked = (countAllowed(state.allowedBgSources, 10) == 1 && state.allowedBgSources[i]);
+        bool na     = (i == 8 && !state.cameraActive.load()) || (i == 9 && !state.hasDeckImages);
+        if (i % 2 == 1) ImGui::SameLine(160.0f);
+        if (locked || na) ImGui::BeginDisabled();
+        bool v = state.allowedBgSources[i];
+        char lbl[64]; snprintf(lbl, sizeof(lbl), "%d: %s##albg%d", i, bgAllow[i], i);
+        if (ImGui::Checkbox(lbl, &v)) {
+            state.allowedBgSources[i] = v; state.allowedListsDirty = true;
+            if (!v && state.bgSourceIndex == i) for (int j=0;j<10;++j) if(state.allowedBgSources[j]){state.bgSourceIndex=j;break;}
         }
+        if (locked || na) { ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                ImGui::SetTooltip(locked ? "At least 1 source required" : (i==8?"Camera inactive":"No deck images")); }
+    }
+    ImGui::Spacing();
+    ImGui::SeparatorText("Filtres (Etape 2)");
+    const char* fxAllow[] = { "Raw / Through", "Sobel Neon", "ASCII Art", "Ordered Dither", "Halftone Pop-Art", "Cross-Hatch" };
+    for (int i = 0; i < 6; ++i) {
+        bool locked = (countAllowed(state.allowedEffects, 6) == 1 && state.allowedEffects[i]);
+        if (locked) ImGui::BeginDisabled();
+        bool v = state.allowedEffects[i];
+        char lbl[64]; snprintf(lbl, sizeof(lbl), "%d: %s##alfx%d", i, fxAllow[i], i);
+        if (ImGui::Checkbox(lbl, &v)) {
+            state.allowedEffects[i] = v; state.allowedListsDirty = true;
+            if (!v && state.effectIndex == i) for (int j=0;j<6;++j) if(state.allowedEffects[j]){state.effectIndex=j;break;}
+        }
+        if (locked) { ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("At least 1 filter required"); }
+    }
+    ImGui::Spacing();
+    ImGui::SeparatorText("Impacts (Etape 3)");
+    const char* impAllow[] = { "Aucun (None)", "CRT Glitch", "Pixel Sort", "Slit-Scan" };
+    for (int i = 0; i < 4; ++i) {
+        bool locked = (countAllowed(state.allowedImpacts, 4) == 1 && state.allowedImpacts[i]);
+        if (locked) ImGui::BeginDisabled();
+        bool v = state.allowedImpacts[i];
+        char lbl[64]; snprintf(lbl, sizeof(lbl), "%d: %s##alimp%d", i, impAllow[i], i);
+        if (ImGui::Checkbox(lbl, &v)) {
+            state.allowedImpacts[i] = v; state.allowedListsDirty = true;
+            if (!v && state.impactIndex == i) for (int j=0;j<4;++j) if(state.allowedImpacts[j]){state.impactIndex=j;state.netImpactIndex.store(j,std::memory_order_relaxed);break;}
+        }
+        if (locked) { ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("At least 1 impact required"); }
     }
     ImGui::End();
 
+    // ── (legacy placeholder removed) ───────────────────────────────────────────
     ImGui::SetNextWindowSize({380.0f, 220.0f}, ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowPos ({420.0f, 300.0f}, ImGuiCond_FirstUseEver);
     if (ImGui::Begin("Video Export Studio", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {

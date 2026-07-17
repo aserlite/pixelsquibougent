@@ -523,6 +523,25 @@ function connect() {
             btnDrop.classList.toggle('active', msg.mode === 1);
           }
         }
+        // 9. Synchronisation des Allowlists (masque les éléments non autorisés)
+        if (Array.isArray(msg.allowedBg)) {
+          document.querySelectorAll('#source-grid button').forEach((btn, idx) => {
+            const allowed = msg.allowedBg[idx] !== false;
+            btn.style.display = allowed ? '' : 'none';
+          });
+        }
+        if (Array.isArray(msg.allowedFx)) {
+          document.querySelectorAll('#filter-grid button').forEach((btn, idx) => {
+            const allowed = msg.allowedFx[idx] !== false;
+            btn.style.display = allowed ? '' : 'none';
+          });
+        }
+        if (Array.isArray(msg.allowedImp)) {
+          document.querySelectorAll('#impact-grid button').forEach((btn, idx) => {
+            const allowed = msg.allowedImp[idx] !== false;
+            btn.style.display = allowed ? '' : 'none';
+          });
+        }
       }
     } catch (err) {}
   };

@@ -75,8 +75,12 @@ struct EngineOrchestrator::Impl {
         j["mode"]        = state.macroMode;
         j["hasDeck"]     = state.hasDeckImages;
         j["deckIdx"]     = state.activeDeckIndex;
+        j["allowedBg"]   = std::vector<bool>(std::begin(state.allowedBgSources), std::end(state.allowedBgSources));
+        j["allowedFx"]   = std::vector<bool>(std::begin(state.allowedEffects),   std::end(state.allowedEffects));
+        j["allowedImp"]  = std::vector<bool>(std::begin(state.allowedImpacts),   std::end(state.allowedImpacts));
         server.broadcast(j.dump());
         syncSnapshot();
+        state.allowedListsDirty = false;
     }
 
     bool stateDirty() const {
@@ -92,7 +96,8 @@ struct EngineOrchestrator::Impl {
             || state.kickTarget              != lastSyncKickTarget
             || state.kickCounter             != lastSyncKickCounter
             || state.autoMacroMode           != lastSyncAutoMacro
-            || state.macroMode               != lastSyncMode;
+            || state.macroMode               != lastSyncMode
+            || state.allowedListsDirty;
     }
 
     void consumeNetworkCommands() {
@@ -263,10 +268,15 @@ struct EngineOrchestrator::Impl {
 
         if (!state.autoVisualSwitchArmed || !kickFired) return;
 
-        constexpr int kMaxBg = 10;
-        int nextBg = (state.bgSourceIndex + 1) % kMaxBg;
-        if (nextBg == 8 && !state.cameraActive.load()) nextBg = 9;
-        if (nextBg == 9 && !state.hasDeckImages) nextBg = 0;
+        int nextBg = state.bgSourceIndex;
+        for (int i = 1; i <= 10; i++) {
+            int candidate = (state.bgSourceIndex + i) % 10;
+            if (!state.allowedBgSources[candidate]) continue;
+            if (candidate == 8 && !state.cameraActive.load()) continue;
+            if (candidate == 9 && !state.hasDeckImages) continue;
+            nextBg = candidate;
+            break;
+        }
 
         if (!state.isTransitioning && nextBg != state.bgSourceIndex) {
             state.targetBgSourceIndex = nextBg;
@@ -276,7 +286,13 @@ struct EngineOrchestrator::Impl {
             state.bgSourceIndex = nextBg;
         }
 
-        state.effectIndex     = (state.effectIndex + 1) % 6;
+        int nextEff = state.effectIndex;
+        for (int i = 1; i <= 6; i++) {
+            int candidate = (state.effectIndex + i) % 6;
+            if (state.allowedEffects[candidate]) { nextEff = candidate; break; }
+        }
+        state.effectIndex = nextEff;
+
         state.autoVisualSwitchTimer = 0.0f;
         state.autoVisualSwitchArmed = false;
         sendSyncState();
