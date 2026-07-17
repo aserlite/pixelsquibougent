@@ -456,11 +456,10 @@ vec3 src_get(vec2 uv, int index) {
         case 2:  return src_raymarching(uv);
         case 3:  return src_metaballs(uv);
         case 4:  return src_fluid_blob(uv);
-        case 5:  return src_reaction_diffusion(uv);
-        case 6:  return src_clifford(uv);
-        case 7:  return src_voronoi(uv);
-        case 8:  return (u_camera_active == 1) ? cam_raw(uv) : src_noise(uv);
-        case 9:  return texture(u_deck_texture, vec2(uv.x, 1.0 - uv.y)).rgb;
+        case 5:  return src_clifford(uv);
+        case 6:  return src_voronoi(uv);
+        case 7:  return (u_camera_active == 1) ? cam_raw(uv) : src_noise(uv);
+        case 8:  return texture(u_deck_texture, vec2(uv.x, 1.0 - uv.y)).rgb;
         default: return src_noise(uv);
     }
 }
@@ -693,6 +692,35 @@ vec3 flt_crosshatch(vec2 uv) {
     return clamp(outColor, 0.0, 1.0);
 }
 
+// ─── FILTRE 6 : Reaction-Diffusion Displacement ───────────────────────────────
+// Utilise le gradient du champ V de la simulation Gray-Scott
+// pour déformer les UV de la source courante.
+
+vec3 flt_rd_displace(vec2 uv) {
+    vec4 rdState = texture(u_prev_frame, uv);
+    float V = rdState.g;
+
+    vec2 tx = vec2(2.5) / u_resolution;
+    float vR = texture(u_prev_frame, uv + vec2(tx.x, 0.0)).g;
+    float vL = texture(u_prev_frame, uv - vec2(tx.x, 0.0)).g;
+    float vU = texture(u_prev_frame, uv + vec2(0.0, tx.y)).g;
+    float vD = texture(u_prev_frame, uv - vec2(0.0, tx.y)).g;
+    vec2 grad = vec2(vR - vL, vU - vD);
+
+    float dispAmt = 0.08 + u_kick * 0.18 + clamp(u_energy, 0.0, 1.0) * 0.06;
+    if (u_mode == 1) dispAmt *= 1.4;
+    vec2 dispUV = clamp(uv + grad * dispAmt, 0.0, 1.0);
+
+    vec3 col = sample_source_texture(dispUV);
+
+    vec3 custom_c = (u_mode == 1) ? u_color_drop : u_color_break;
+    float overlay = smoothstep(0.1, 0.9, V);
+    vec3 rdColor  = mix(palette_col(V * 2.5), custom_c, 0.55);
+    col = mix(col, rdColor, overlay * 0.60);
+    col += vec3(u_kick * 0.28) * V;
+    return clamp(col, 0.0, 1.0);
+}
+
 // ─── Filter & Impact Routing Helpers ──────────────────────────────────────────
 
 vec3 apply_filter(int idx, vec2 uv) {
@@ -703,6 +731,7 @@ vec3 apply_filter(int idx, vec2 uv) {
         case 3:  return flt_dither(uv);
         case 4:  return flt_halftone(uv);
         case 5:  return flt_crosshatch(uv);
+        case 6:  return flt_rd_displace(uv);
         default: return flt_raw(uv);
     }
 }
@@ -757,11 +786,9 @@ vec3 imp_pixelsort(vec2 uv) {
 
 void main() {
     if (u_sim_pass == 1) {
-        int sim_idx = (u_is_transitioning == 1 && (u_target_bg_source_index == 5))
-                      ? u_target_bg_source_index
-                      : u_bg_source_index;
-        if (sim_idx == 5) frag_color = vec4(src_reaction_diffusion(v_uv), 1.0);
-        else              frag_color = vec4(0.0);
+        bool run_rd = (u_effect_index == 6);
+        if (run_rd) frag_color = vec4(src_reaction_diffusion(v_uv), 1.0);
+        else        frag_color = vec4(0.0);
         return;
     }
     if (u_sim_pass == 2) {

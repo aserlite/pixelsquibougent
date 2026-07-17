@@ -410,10 +410,9 @@ void RenderEngine::renderOutput(const VJState& state, int width, int height, uns
         }
     };
 
-    bool isPingPongSource = (state.bgSourceIndex == 5) ||
-                            (state.isTransitioning && (state.targetBgSourceIndex == 5));
+    bool needsRdSim = (state.effectIndex == 6);
 
-    if (isPingPongSource) {
+    if (needsRdSim) {
         glBindFramebuffer(GL_FRAMEBUFFER, m_fbo[m_pingPongIndex]);
         glViewport(0, 0, width, height);
 
@@ -434,7 +433,7 @@ void RenderEngine::renderOutput(const VJState& state, int width, int height, uns
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, m_cameraTexture);
 
-    if (isPingPongSource) {
+    if (needsRdSim) {
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, m_pingPongTex[m_pingPongIndex]);
     } else {
@@ -450,7 +449,7 @@ void RenderEngine::renderOutput(const VJState& state, int width, int height, uns
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, m_cameraTexture);
 
-    if (isPingPongSource) {
+    if (needsRdSim) {
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, m_pingPongTex[m_pingPongIndex]);
     } else {
@@ -473,7 +472,7 @@ void RenderEngine::renderOutput(const VJState& state, int width, int height, uns
     setCommonUniforms(0, 1);
     glDrawArrays(GL_TRIANGLES, 0, 3);
 
-    if (isPingPongSource) {
+    if (needsRdSim) {
         m_pingPongIndex = 1 - m_pingPongIndex;
     }
 }

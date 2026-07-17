@@ -209,11 +209,10 @@
             <button id="btn-bg-2">TUNNEL</button>
             <button id="btn-bg-3">METABALLS</button>
             <button id="btn-bg-4">FLUID_BLOB</button>
-            <button id="btn-bg-5">REACT-DIFF</button>
-            <button id="btn-bg-6">CLIFFORD</button>
-            <button id="btn-bg-7">VORONOI</button>
-            <button id="btn-bg-8" style="grid-column: span 2; background: var(--orange); color:#000; display:none;">CAM_SOURCE</button>
-            <button id="btn-bg-9" style="grid-column: span 2; background: var(--purple); color:#fff;">IMAGE_DECK</button>
+            <button id="btn-bg-5">CLIFFORD</button>
+            <button id="btn-bg-6">VORONOI</button>
+            <button id="btn-bg-7" style="grid-column: span 2; background: var(--orange); color:#000; display:none;">CAM_SOURCE</button>
+            <button id="btn-bg-8" style="grid-column: span 2; background: var(--purple); color:#fff;">IMAGE_DECK</button>
           </div>
         </section>
       </div>
@@ -228,6 +227,7 @@
             <button id="btn-eff-3">DITHER</button>
             <button id="btn-eff-4">HALFTONE</button>
             <button id="btn-eff-5">CROSS-HATCH</button>
+            <button id="btn-eff-6">RD_WARP</button>
           </div>
           <h2 style="margin-top: 8px;">03_IMPACTS (ON FLASH/KICK)</h2>
           <div class="btn-grid" id="impact-grid" style="flex: 1 1 auto; min-height: 0;">
@@ -809,7 +809,7 @@ async function startCam() {
     
     sourceButtons.forEach(b => b.classList.remove('active'));
     camSourceBtn.classList.add('active');
-    send({cmd: 'set_bg_source', value: 8});
+    send({cmd: 'set_bg_source', value: 7});
 
     cameraLoop = setInterval(processAndSendFrame, 1000 / 12);
   } catch (err) {

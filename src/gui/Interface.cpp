@@ -117,13 +117,13 @@ void Interface::render(VJState& state) {
             state.isTransitioning = false;
         }
     };
-    const char* bgNames[]      = { "0: Noise Field", "1: Curl Noise (Fluid)", "2: Raymarching Tunnel", "3: Metaballs 3D", "4: Fluid Morphing Blob", "5: Reaction-Diffusion", "6: Clifford Attractor", "7: Voronoi Tessellation", "8: Camera Stream (Live)", "9: Image Deck" };
-    const char* bgShortNames[] = { "Noise", "Curl", "Tunnel", "Metaballs", "Fluid", "React-Diff", "Clifford", "Voronoi", "Camera", "Img Deck" };
+    const char* bgNames[]      = { "0: Noise Field", "1: Curl Noise (Fluid)", "2: Raymarching Tunnel", "3: Metaballs 3D", "4: Fluid Morphing Blob", "5: Clifford Attractor", "6: Voronoi Tessellation", "7: Camera Stream (Live)", "8: Image Deck" };
+    const char* bgShortNames[] = { "Noise", "Curl", "Tunnel", "Metaballs", "Fluid", "Clifford", "Voronoi", "Camera", "Img Deck" };
     ImGui::SetNextItemWidth(280.0f);
     if (ImGui::BeginCombo("##srccombo", bgNames[state.bgSourceIndex])) {
-        for (int i = 0; i < 10; ++i) {
+        for (int i = 0; i < 9; ++i) {
             if (!state.allowedBgSources[i]) continue;
-            if (i == 8 && !state.cameraActive.load()) continue;
+            if (i == 7 && !state.cameraActive.load()) continue;
             bool sel = (state.bgSourceIndex == i);
             if (ImGui::Selectable(bgNames[i], sel)) selectBgSource(i);
             if (sel) ImGui::SetItemDefaultFocus();
@@ -131,23 +131,23 @@ void Interface::render(VJState& state) {
         ImGui::EndCombo();
     }
     { int col = 0;
-      for (int i = 0; i < 10; ++i) {
+      for (int i = 0; i < 9; ++i) {
         if (!state.allowedBgSources[i]) continue;
-        if (i == 8 && !state.cameraActive.load()) continue;
+        if (i == 7 && !state.cameraActive.load()) continue;
         if (col > 0 && col % 4 != 0) ImGui::SameLine();
         char lbl[32]; snprintf(lbl, sizeof(lbl), "%s##bg%d", bgShortNames[i], i);
         if (ImGui::RadioButton(lbl, state.bgSourceIndex == i)) selectBgSource(i);
         ++col;
       }
     }
-    if (state.bgSourceIndex == 9) { ImGui::SameLine(); if (ImGui::Button("Next##deck")) state.netTriggerRandomImg.store(true, std::memory_order_release); }
+    if (state.bgSourceIndex == 8) { ImGui::SameLine(); if (ImGui::Button("Next##deck")) state.netTriggerRandomImg.store(true, std::memory_order_release); }
 
     ImGui::SeparatorText("Filtre — Etape 2");
-    const char* filterNames[]   = { "0: Raw / Through", "1: Sobel Neon", "2: ASCII Art", "3: Ordered Dither", "4: Halftone Pop-Art", "5: Cross-Hatch" };
-    const char* fltShortNames[] = { "Raw", "Sobel", "ASCII", "Dither", "Halftone", "X-Hatch" };
+    const char* filterNames[]   = { "0: Raw / Through", "1: Sobel Neon", "2: ASCII Art", "3: Ordered Dither", "4: Halftone Pop-Art", "5: Cross-Hatch", "6: RD Displace" };
+    const char* fltShortNames[] = { "Raw", "Sobel", "ASCII", "Dither", "Halftone", "X-Hatch", "RD Warp" };
     ImGui::SetNextItemWidth(280.0f);
     if (ImGui::BeginCombo("##fltcombo", filterNames[state.effectIndex])) {
-        for (int i = 0; i < 6; ++i) {
+        for (int i = 0; i < 7; ++i) {
             if (!state.allowedEffects[i]) continue;
             bool sel = (state.effectIndex == i);
             if (ImGui::Selectable(filterNames[i], sel)) state.effectIndex = i;
@@ -156,7 +156,7 @@ void Interface::render(VJState& state) {
         ImGui::EndCombo();
     }
     { int col = 0;
-      for (int i = 0; i < 6; ++i) {
+      for (int i = 0; i < 7; ++i) {
         if (!state.allowedEffects[i]) continue;
         if (col > 0 && col % 3 != 0) ImGui::SameLine();
         char lbl[32]; snprintf(lbl, sizeof(lbl), "%s##f%d", fltShortNames[i], i);
@@ -226,27 +226,27 @@ void Interface::render(VJState& state) {
     ImGui::TextDisabled("Min. 1 element per category.");
     ImGui::Spacing();
     ImGui::SeparatorText("Sources BG (Etape 1)");
-    const char* bgAllow[] = { "Noise Field", "Curl Noise", "Tunnel 3D", "Metaballs", "Fluid Blob", "React-Diffusion", "Clifford", "Voronoi", "Camera", "Image Deck" };
-    for (int i = 0; i < 10; ++i) {
-        bool locked = (countAllowed(state.allowedBgSources, 10) == 1 && state.allowedBgSources[i]);
-        bool na     = (i == 8 && !state.cameraActive.load()) || (i == 9 && !state.hasDeckImages);
+    const char* bgAllow[] = { "Noise Field", "Curl Noise", "Tunnel 3D", "Metaballs", "Fluid Blob", "Clifford", "Voronoi", "Camera", "Image Deck" };
+    for (int i = 0; i < 9; ++i) {
+        bool locked = (countAllowed(state.allowedBgSources, 9) == 1 && state.allowedBgSources[i]);
+        bool na     = (i == 7 && !state.cameraActive.load()) || (i == 8 && !state.hasDeckImages);
         if (i % 2 == 1) ImGui::SameLine(160.0f);
         if (locked || na) ImGui::BeginDisabled();
         bool v = state.allowedBgSources[i];
         char lbl[64]; snprintf(lbl, sizeof(lbl), "%d: %s##albg%d", i, bgAllow[i], i);
         if (ImGui::Checkbox(lbl, &v)) {
             state.allowedBgSources[i] = v; state.allowedListsDirty = true;
-            if (!v && state.bgSourceIndex == i) for (int j=0;j<10;++j) if(state.allowedBgSources[j]){state.bgSourceIndex=j;break;}
+            if (!v && state.bgSourceIndex == i) for (int j=0;j<9;++j) if(state.allowedBgSources[j]){state.bgSourceIndex=j;break;}
         }
         if (locked || na) { ImGui::EndDisabled();
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip(locked ? "At least 1 source required" : (i==8?"Camera inactive":"No deck images")); }
+                ImGui::SetTooltip(locked ? "At least 1 source required" : (i==7?"Camera inactive":"No deck images")); }
     }
     ImGui::Spacing();
     ImGui::SeparatorText("Filtres (Etape 2)");
-    const char* fxAllow[] = { "Raw / Through", "Sobel Neon", "ASCII Art", "Ordered Dither", "Halftone Pop-Art", "Cross-Hatch" };
-    for (int i = 0; i < 6; ++i) {
-        bool locked = (countAllowed(state.allowedEffects, 6) == 1 && state.allowedEffects[i]);
+    const char* fxAllow[] = { "Raw / Through", "Sobel Neon", "ASCII Art", "Ordered Dither", "Halftone Pop-Art", "Cross-Hatch", "RD Displace" };
+    for (int i = 0; i < 7; ++i) {
+        bool locked = (countAllowed(state.allowedEffects, 7) == 1 && state.allowedEffects[i]);
         if (locked) ImGui::BeginDisabled();
         bool v = state.allowedEffects[i];
         char lbl[64]; snprintf(lbl, sizeof(lbl), "%d: %s##alfx%d", i, fxAllow[i], i);

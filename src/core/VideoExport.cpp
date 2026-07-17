@@ -211,6 +211,7 @@ float VideoExport::getEstimatedTimeRemaining() const { return m_etaSeconds; }
 int VideoExport::getFps() const { return m_fps; }
 
 bool VideoExport::processStep(VJState& state, RenderEngine& render, AudioEngine& audio, int screenWidth, int screenHeight) {
+    (void)screenWidth; (void)screenHeight;
     if (!m_isExporting.load(std::memory_order_relaxed)) return false;
 
     if (m_currentFrame >= m_totalFrames || state.exportCancelRequested) {

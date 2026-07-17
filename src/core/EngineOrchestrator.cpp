@@ -269,11 +269,11 @@ struct EngineOrchestrator::Impl {
         if (!state.autoVisualSwitchArmed || !kickFired) return;
 
         int nextBg = state.bgSourceIndex;
-        for (int i = 1; i <= 10; i++) {
-            int candidate = (state.bgSourceIndex + i) % 10;
+        for (int i = 1; i <= 9; i++) {
+            int candidate = (state.bgSourceIndex + i) % 9;
             if (!state.allowedBgSources[candidate]) continue;
-            if (candidate == 8 && !state.cameraActive.load()) continue;
-            if (candidate == 9 && !state.hasDeckImages) continue;
+            if (candidate == 7 && !state.cameraActive.load()) continue;
+            if (candidate == 8 && !state.hasDeckImages) continue;
             nextBg = candidate;
             break;
         }
@@ -287,8 +287,8 @@ struct EngineOrchestrator::Impl {
         }
 
         int nextEff = state.effectIndex;
-        for (int i = 1; i <= 6; i++) {
-            int candidate = (state.effectIndex + i) % 6;
+        for (int i = 1; i <= 7; i++) {
+            int candidate = (state.effectIndex + i) % 7;
             if (state.allowedEffects[candidate]) { nextEff = candidate; break; }
         }
         state.effectIndex = nextEff;
