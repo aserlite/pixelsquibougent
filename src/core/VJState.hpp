@@ -75,6 +75,9 @@ struct VJState {
     float       exportTime            = 0.0f;
     bool        exportRequested       = false;
     bool        exportCancelRequested = false;
+    bool        showExportConfigModal = false;
+    char        exportAudioPath[512]  = "";
+    char        exportOutputPath[512] = "output";
     int         exportResIndex        = 1;
     float       exportProgress        = 0.0f;
     int         exportCurrentFrame    = 0;

@@ -35,6 +35,7 @@ public:
     [[nodiscard]] int   getCurrentFrame() const;
     [[nodiscard]] int   getTotalFrames() const;
     [[nodiscard]] float getEstimatedTimeRemaining() const;
+    [[nodiscard]] int   getFps() const;
 
     bool processStep(VJState& state, RenderEngine& render, AudioEngine& audio, int screenWidth, int screenHeight);
 
@@ -55,7 +56,7 @@ private:
     std::atomic<float> m_progress{0.0f};
     std::string        m_mp3Path;
     std::string        m_outputPath;
-    std::vector<uint8_t> m_pixelBuffer;
+    unsigned int       m_pbo[3] = {0, 0, 0};
 
     bool initExportFBO(int width, int height);
     void deleteExportFBO();

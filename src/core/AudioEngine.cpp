@@ -417,6 +417,24 @@ void AudioEngine::shutdown() {
     std::cout << "[AudioEngine] Shutdown.\n";
 }
 
+void AudioEngine::stopLivePlayback() {
+    if (m_impl->initialised) {
+        ma_device_stop(&m_impl->device);
+        ma_device_uninit(&m_impl->device);
+        m_impl->initialised = false;
+    }
+    if (m_impl->decoderLoaded) {
+        ma_decoder_uninit(&m_impl->decoder);
+        m_impl->decoderLoaded = false;
+    }
+    std::cout << "[AudioEngine] Live playback stopped for silent offline analysis.\n";
+}
+
+bool AudioEngine::prepareSilentAnalysis(const char* path) {
+    if (!path || path[0] == '\0') return false;
+    return prepareOfflineAnalysis(std::string(path));
+}
+
 bool  AudioEngine::kickDetected()       const { return m_impl->kickDetected.load(std::memory_order_acquire); }
 float AudioEngine::bassEnergy()         const { return m_impl->bassEnergy.load(std::memory_order_relaxed); }
 float AudioEngine::subBassEnergy()      const { return m_impl->subBassEnergy.load(std::memory_order_relaxed); }
@@ -507,9 +525,10 @@ float AudioEngine::getTotalDurationSeconds() const {
     return m_impl->offlineDuration;
 }
 
-bool AudioEngine::analyzeTimestamp(float timestampSec, VJState& outState) {
-    if (m_impl->offlineMonoPcm.empty()) return false;
+void AudioEngine::advanceOfflineAnalysis(int frameIndex, int fps) {
+    if (m_impl->offlineMonoPcm.empty() || fps <= 0) return;
 
+    float timestampSec = static_cast<float>(frameIndex) / static_cast<float>(fps);
     int centerIdx = static_cast<int>(timestampSec * m_impl->sampleRate);
     int startIdx  = centerIdx - kFftSize;
 
@@ -523,6 +542,10 @@ bool AudioEngine::analyzeTimestamp(float timestampSec, VJState& outState) {
     }
 
     m_impl->processFrame();
+}
+
+bool AudioEngine::analyzeTimestamp(float, VJState& outState) {
+    if (m_impl->offlineMonoPcm.empty()) return false;
 
     outState.bassCurrent    = m_impl->bassEnergy.load(std::memory_order_relaxed);
     outState.subBassCurrent = m_impl->subBassEnergy.load(std::memory_order_relaxed);
@@ -530,16 +553,6 @@ bool AudioEngine::analyzeTimestamp(float timestampSec, VJState& outState) {
     outState.bassThreshold  = m_impl->threshold.load(std::memory_order_relaxed);
     copyEnergyHistory(outState.bassHistory);
     copySpectrum32(outState.audioSpectrum);
-
-    outState.kickDetected = kickDetected();
-    outState.zScoreImpact = checkZScoreImpact(outState.zScoreK);
-    clearKick();
-
-    bool kickFired = outState.kickDetected || outState.zScoreImpact;
-    if (kickFired) {
-        outState.flashIntensity = 1.0f;
-    }
-    outState.macroMode = macroMode();
-
+    outState.macroMode      = macroMode();
     return true;
 }

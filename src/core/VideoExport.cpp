@@ -48,14 +48,26 @@ bool VideoExport::initExportFBO(int width, int height) {
     }
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    m_pixelBuffer.resize(width * height * 4);
+
+    glGenBuffers(3, m_pbo);
+    for (int i = 0; i < 3; ++i) {
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, m_pbo[i]);
+        glBufferData(GL_PIXEL_PACK_BUFFER, width * height * 3, nullptr, GL_STREAM_READ);
+    }
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+
     return true;
 }
 
 void VideoExport::deleteExportFBO() {
+    if (m_pbo[0] || m_pbo[1] || m_pbo[2]) {
+        glDeleteBuffers(3, m_pbo);
+        m_pbo[0] = 0;
+        m_pbo[1] = 0;
+        m_pbo[2] = 0;
+    }
     if (m_exportTex) { glDeleteTextures(1, &m_exportTex); m_exportTex = 0; }
     if (m_exportFBO) { glDeleteFramebuffers(1, &m_exportFBO); m_exportFBO = 0; }
-    m_pixelBuffer.clear();
 }
 
 bool VideoExport::startExport(const std::string& mp3Path,
@@ -84,10 +96,12 @@ bool VideoExport::startExport(const std::string& mp3Path,
         return false;
     }
 
-    if (!audio.prepareOfflineAnalysis(mp3Path)) {
-        std::cerr << "[VideoExport] Failed to prepare offline audio analysis.\n";
-        deleteExportFBO();
-        return false;
+    if (audio.getTotalDurationSeconds() <= 0.0f) {
+        if (!audio.prepareSilentAnalysis(mp3Path.c_str())) {
+            std::cerr << "[VideoExport] Failed to prepare silent audio analysis.\n";
+            deleteExportFBO();
+            return false;
+        }
     }
 
     float duration = audio.getTotalDurationSeconds();
@@ -107,11 +121,11 @@ bool VideoExport::startExport(const std::string& mp3Path,
     m_startTime    = glfwGetTime();
     m_etaSeconds   = 0.0f;
 
-    std::string cmd = "ffmpeg -y -f rawvideo -vcodec rawvideo -pix_fmt rgba -s " +
+    std::string cmd = "ffmpeg -y -f rawvideo -vcodec rawvideo -pix_fmt rgb24 -s " +
                       std::to_string(width) + "x" + std::to_string(height) +
                       " -r " + std::to_string(fps) +
                       " -i - -i \"" + mp3Path +
-                      "\" -c:v libx264 -pix_fmt yuv420p -vf vflip -c:a aac -b:a 192k -shortest \"" +
+                      "\" -c:v libx264 -preset veryfast -crf 18 -tune grain -maxrate 8000k -bufsize 16000k -pix_fmt yuv420p -vf vflip -threads 0 -c:a aac -b:a 192k -shortest \"" +
                       outputPath + "\" 2>/dev/null";
 
     std::cout << "[VideoExport] Opening FFmpeg pipe: " << cmd << "\n";
@@ -135,6 +149,26 @@ bool VideoExport::startExport(const std::string& mp3Path,
 
 void VideoExport::finishExport(VJState& state, AudioEngine& audio) {
     if (m_ffmpegPipe) {
+        if (m_currentFrame > 1) {
+            int secondLastReadIndex = (m_currentFrame - 2) % 3;
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, m_pbo[secondLastReadIndex]);
+            auto* ptr = static_cast<uint8_t*>(glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, m_width * m_height * 3, GL_MAP_READ_BIT));
+            if (ptr) {
+                fwrite(ptr, 1, m_width * m_height * 3, m_ffmpegPipe);
+            }
+            glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+        }
+        if (m_currentFrame > 0) {
+            int lastReadIndex = (m_currentFrame - 1) % 3;
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, m_pbo[lastReadIndex]);
+            auto* ptr = static_cast<uint8_t*>(glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, m_width * m_height * 3, GL_MAP_READ_BIT));
+            if (ptr) {
+                fwrite(ptr, 1, m_width * m_height * 3, m_ffmpegPipe);
+            }
+            glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+        }
         std::cout << "[VideoExport] Finalizing FFmpeg pipe...\n";
         pclose(m_ffmpegPipe);
         m_ffmpegPipe = nullptr;
@@ -174,6 +208,7 @@ float VideoExport::getProgress() const {
 int VideoExport::getCurrentFrame() const { return m_currentFrame; }
 int VideoExport::getTotalFrames() const  { return m_totalFrames; }
 float VideoExport::getEstimatedTimeRemaining() const { return m_etaSeconds; }
+int VideoExport::getFps() const { return m_fps; }
 
 bool VideoExport::processStep(VJState& state, RenderEngine& render, AudioEngine& audio, int screenWidth, int screenHeight) {
     if (!m_isExporting.load(std::memory_order_relaxed)) return false;
@@ -195,23 +230,30 @@ bool VideoExport::processStep(VJState& state, RenderEngine& render, AudioEngine&
 
     render.renderOutput(state, m_width, m_height, m_exportFBO);
 
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, m_exportFBO);
-    glReadPixels(0, 0, m_width, m_height, GL_RGBA, GL_UNSIGNED_BYTE, m_pixelBuffer.data());
+    int writeIndex = m_currentFrame % 3;
+    int readIndex  = (m_currentFrame + 1) % 3;
 
-    if (screenWidth > 0 && screenHeight > 0) {
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-        glBlitFramebuffer(0, 0, m_width, m_height, 0, 0, screenWidth, screenHeight, GL_COLOR_BUFFER_BIT, GL_LINEAR);
-    }
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, m_exportFBO);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, m_pbo[writeIndex]);
+    glReadPixels(0, 0, m_width, m_height, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-    if (m_ffmpegPipe) {
-        size_t written = fwrite(m_pixelBuffer.data(), 1, m_pixelBuffer.size(), m_ffmpegPipe);
-        if (written != m_pixelBuffer.size()) {
-            std::cerr << "[VideoExport] Error writing to FFmpeg pipe! Aborting.\n";
-            cancelExport(state, audio);
-            return false;
+    if (m_currentFrame > 1) {
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, m_pbo[readIndex]);
+        auto* ptr = static_cast<uint8_t*>(glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, m_width * m_height * 3, GL_MAP_READ_BIT));
+        if (ptr && m_ffmpegPipe) {
+            size_t written = fwrite(ptr, 1, m_width * m_height * 3, m_ffmpegPipe);
+            if (written != static_cast<size_t>(m_width * m_height * 3)) {
+                std::cerr << "[VideoExport] Error writing to FFmpeg pipe! Aborting.\n";
+                glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+                cancelExport(state, audio);
+                return false;
+            }
         }
+        glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
     }
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 
     m_currentFrame++;
     float prog = static_cast<float>(m_currentFrame) / static_cast<float>(std::max(1, m_totalFrames));

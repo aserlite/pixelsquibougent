@@ -195,7 +195,7 @@ struct EngineOrchestrator::Impl {
     }
 
     bool tickAudio() {
-        if (!audioOk) return false;
+        if (!audioOk || videoExport.isExporting()) return false;
 
         state.bassCurrent    = audio.bassEnergy();
         state.subBassCurrent = audio.subBassEnergy();
@@ -252,7 +252,7 @@ struct EngineOrchestrator::Impl {
 
 
     void tickAutoVisualSwitch(double dt, bool kickFired) {
-        if (!state.autoVisualSwitchEnabled || !audioOk) return;
+        if (!state.autoVisualSwitchEnabled || (!audioOk && !videoExport.isExporting())) return;
 
         state.autoVisualSwitchTimer += static_cast<float>(dt);
 
@@ -315,6 +315,12 @@ struct EngineOrchestrator::Impl {
     }
 
     void renderUIWindow() {
+        if (videoExport.isExporting()) {
+            static double lastUiRenderTime = 0.0;
+            const double now = glfwGetTime();
+            if (now - lastUiRenderTime < 0.033) return;
+            lastUiRenderTime = now;
+        }
         glfwMakeContextCurrent(renderer.uiWindow());
         int uiW, uiH;
         glfwGetFramebufferSize(renderer.uiWindow(), &uiW, &uiH);
@@ -330,17 +336,62 @@ struct EngineOrchestrator::Impl {
     void renderOutputWindow(int outW, int outH) {
         if (state.exportRequested) {
             state.exportRequested = false;
+            state.autoVisualSwitchTimer = 0.0f;
+            state.autoVisualSwitchArmed = false;
+            state.kickCounter = 0;
             const int expW = (state.exportResIndex == 0) ? 1280 : 1920;
             const int expH = (state.exportResIndex == 0) ? 720  : 1080;
-            videoExport.startExport(state.activeMp3Path, "output.mp4", expW, expH, 60, state, renderer, audio);
+            std::string exportMp3 = (state.exportAudioPath[0] != '\0') ? state.exportAudioPath : state.activeMp3Path;
+            std::string outName   = (state.exportOutputPath[0] != '\0') ? state.exportOutputPath : "output";
+            if (outName.length() < 4 || outName.substr(outName.length() - 4) != ".mp4") {
+                outName += ".mp4";
+            }
+            audio.stopLivePlayback();
+            audio.prepareSilentAnalysis(exportMp3.c_str());
+            videoExport.startExport(exportMp3, outName, expW, expH, 60, state, renderer, audio);
+            glfwMakeContextCurrent(renderer.uiWindow());
+            glfwSwapInterval(0);
+            glfwMakeContextCurrent(renderer.outputWindow());
+            glfwSwapInterval(0);
         }
 
-        if (videoExport.isExporting())
+        bool wasExporting = videoExport.isExporting();
+        if (wasExporting) {
+            audio.advanceOfflineAnalysis(videoExport.getCurrentFrame(), videoExport.getFps());
+            bool kickFired = audio.kickDetected() || audio.checkZScoreImpact(state.zScoreK);
+            if (kickFired) {
+                if (state.autoFlashEnabled) {
+                    state.flashIntensity = 1.0f;
+                }
+                if (state.autoSwitchEnabled) {
+                    state.kickCounter++;
+                    if (state.kickCounter >= state.kickTarget) {
+                        state.macroMode = (state.macroMode == 0) ? 1 : 0;
+                        state.kickCounter = 0;
+                        state.netAutoMacro.store(state.macroMode, std::memory_order_release);
+                    }
+                }
+            }
+            audio.clearKick();
+            if (!state.autoSwitchEnabled) {
+                audio.setMacroModeOverride(state.macroMode, state.autoMacroMode);
+                if (state.autoMacroMode) state.macroMode = audio.macroMode();
+            } else {
+                audio.setMacroModeOverride(state.macroMode, false);
+            }
+            tickAutoVisualSwitch(1.0 / static_cast<double>(videoExport.getFps()), kickFired);
+            tickDeck(static_cast<double>(videoExport.getCurrentFrame()) / static_cast<double>(videoExport.getFps()), kickFired);
             videoExport.processStep(state, renderer, audio, outW, outH);
-        else
+            if (!videoExport.isExporting()) {
+                glfwMakeContextCurrent(renderer.uiWindow());
+                glfwSwapInterval(1);
+                glfwMakeContextCurrent(renderer.outputWindow());
+                glfwSwapInterval(1);
+            }
+        } else {
             renderer.renderOutput(state, outW, outH);
-
-        glfwSwapBuffers(renderer.outputWindow());
+            glfwSwapBuffers(renderer.outputWindow());
+        }
     }
 
     void cleanup() {
@@ -364,7 +415,7 @@ EngineOrchestrator::~EngineOrchestrator() = default;
 bool EngineOrchestrator::init(int argc, char* argv[]) {
     auto& d = *m_impl;
 
-    std::cout << "VJ Engine v0.7.2\n";
+    std::cout << "VJ Engine v0.7.7\n";
 
     if (argc >= 2) {
         d.audioOk = d.audio.init(argv[1]);
@@ -409,8 +460,11 @@ void EngineOrchestrator::run() {
 
     while (!d.renderer.shouldClose()) {
         const double now = glfwGetTime();
-        const double dt  = now - prevTime;
+        double dt  = now - prevTime;
         prevTime = now;
+        if (d.videoExport.isExporting()) {
+            dt = 1.0 / static_cast<double>(d.videoExport.getFps());
+        }
         d.state.uiFps = (dt > 0.0) ? static_cast<float>(1.0 / dt) : 0.0f;
 
         glfwPollEvents();
@@ -422,8 +476,10 @@ void EngineOrchestrator::run() {
 
         const bool kickFired = d.tickAudio();
 
-        d.tickAutoVisualSwitch(dt, kickFired);
-        d.tickDeck(now, kickFired);
+        if (!d.videoExport.isExporting()) {
+            d.tickAutoVisualSwitch(dt, kickFired);
+            d.tickDeck(now, kickFired);
+        }
 
         constexpr float kFlashDecay = 5.5f;
         d.state.flashIntensity *= std::exp(-kFlashDecay * static_cast<float>(dt));

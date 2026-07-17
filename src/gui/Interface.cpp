@@ -247,44 +247,90 @@ void Interface::render(VJState& state) {
             ImGui::Text("%.1f / %.1fs", state.autoVisualSwitchTimer, state.autoVisualSwitchInterval);
         }
     }
+    ImGui::End();
 
-    ImGui::SeparatorText("MP3 Hot-Reload");
-    ImGui::SetNextItemWidth(-80.0f);
-    ImGui::InputText("##mp3path", state.pendingMp3Path, sizeof(state.pendingMp3Path));
-    ImGui::SameLine();
-    if (ImGui::Button("Load##mp3")) {
-        if (state.pendingMp3Path[0] != '\0') {
-            state.mp3ReloadRequested = true;
+    ImGui::SetNextWindowSize({380.0f, 220.0f}, ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos ({420.0f, 300.0f}, ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("Video Export Studio", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        if (state.offlineExport) {
+            ImGui::TextColored({0.2f, 1.0f, 0.2f, 1.0f}, "EXPORTING... (Deterministic 60 FPS)");
+            char buf[128];
+            snprintf(buf, sizeof(buf), "Frame %d / %d (%.1f%%) - ETA: %.1fs",
+                     state.exportCurrentFrame, state.exportTotalFrames,
+                     state.exportProgress * 100.0f, state.exportEtaSeconds);
+            ImGui::ProgressBar(state.exportProgress, ImVec2(-1.0f, 0.0f), buf);
+
+            if (ImGui::Button("Cancel Export##exp", ImVec2(-1.0f, 0.0f))) {
+                state.exportCancelRequested = true;
+            }
+        } else {
+            ImGui::Text("Resolution:");
+            ImGui::RadioButton("720p (1280x720)##exp",  &state.exportResIndex, 0); ImGui::SameLine();
+            ImGui::RadioButton("1080p (1920x1080)##exp", &state.exportResIndex, 1);
+            ImGui::Separator();
+
+            if (ImGui::Button("Configure & Render (MP4)##exp", ImVec2(-1.0f, 0.0f))) {
+                if (state.exportAudioPath[0] == '\0' && !state.activeMp3Path.empty()) {
+                    strncpy(state.exportAudioPath, state.activeMp3Path.c_str(), sizeof(state.exportAudioPath) - 1);
+                    state.exportAudioPath[sizeof(state.exportAudioPath) - 1] = '\0';
+                }
+                state.showExportConfigModal = true;
+            }
+        }
+
+        if (state.showExportConfigModal) {
+            ImGui::OpenPopup("Export Configuration");
+        }
+
+        if (ImGui::BeginPopupModal("Export Configuration", &state.showExportConfigModal, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("Configure Automation Rules for Video Render:");
+            ImGui::Separator();
+
+            ImGui::InputText("Audio Path (.mp3)", state.exportAudioPath, sizeof(state.exportAudioPath));
+            ImGui::InputText("Output File (.mp4)", state.exportOutputPath, sizeof(state.exportOutputPath));
+            ImGui::Separator();
+
+            if (ImGui::Checkbox("Enable Auto-Structure Loop (Grid-Sync)", &state.autoSwitchEnabled)) {
+                state.netAutoSwitchEnabled.store(state.autoSwitchEnabled, std::memory_order_release);
+            }
+            if (ImGui::Checkbox("Enable Auto-Kick Flash (Strobe)", &state.autoFlashEnabled)) {
+                state.netAutoFlashEnabled.store(state.autoFlashEnabled, std::memory_order_release);
+            }
+            if (ImGui::Checkbox("Enable Auto-Visuals Switch", &state.autoVisualSwitchEnabled)) {
+                state.netAutoVisualSwitchEnabled.store(state.autoVisualSwitchEnabled, std::memory_order_release);
+            }
+            ImGui::Checkbox("Enable Auto-Switch via Audio (Drop/Break)", &state.autoMacroMode);
+
+            ImGui::Text("Initial Macro Mode:");
+            if (ImGui::RadioButton("BREAK", &state.macroMode, 0)) {
+                state.netAutoMacro.store(0, std::memory_order_release);
+            }
+            ImGui::SameLine();
+            if (ImGui::RadioButton("DROP", &state.macroMode, 1)) {
+                state.netAutoMacro.store(1, std::memory_order_release);
+            }
+
+            ImGui::Separator();
+
+            if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+                state.showExportConfigModal = false;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Launch Render", ImVec2(120, 0))) {
+                state.showExportConfigModal = false;
+                state.kickCounter = 0;
+                state.netAutoSwitchEnabled.store(state.autoSwitchEnabled, std::memory_order_release);
+                state.netAutoFlashEnabled.store(state.autoFlashEnabled, std::memory_order_release);
+                state.netAutoVisualSwitchEnabled.store(state.autoVisualSwitchEnabled, std::memory_order_release);
+                state.netAutoMacro.store(state.macroMode, std::memory_order_release);
+                state.exportRequested = true;
+                ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::EndPopup();
         }
     }
-
-    ImGui::SeparatorText("Export Video (Offline FFmpeg Pipe)");
-    if (state.offlineExport) {
-        ImGui::TextColored({0.2f, 1.0f, 0.2f, 1.0f}, "EXPORTING... (Deterministic 60 FPS)");
-        char buf[128];
-        snprintf(buf, sizeof(buf), "Frame %d / %d (%.1f%%) - ETA: %.1fs",
-                 state.exportCurrentFrame, state.exportTotalFrames,
-                 state.exportProgress * 100.0f, state.exportEtaSeconds);
-        ImGui::ProgressBar(state.exportProgress, ImVec2(-1.0f, 0.0f), buf);
-
-        if (ImGui::Button("Cancel Export##exp", ImVec2(-1.0f, 0.0f))) {
-            state.exportCancelRequested = true;
-        }
-    } else {
-        ImGui::RadioButton("720p (1280x720)##exp",  &state.exportResIndex, 0); ImGui::SameLine();
-        ImGui::RadioButton("1080p (1920x1080)##exp", &state.exportResIndex, 1);
-
-        bool canExport = !state.activeMp3Path.empty();
-        if (!canExport) ImGui::BeginDisabled();
-        if (ImGui::Button("Render Video Output (MP4)##exp", ImVec2(-1.0f, 0.0f))) {
-            state.exportRequested = true;
-        }
-        if (!canExport) {
-            ImGui::EndDisabled();
-            ImGui::TextDisabled("Load an MP3 file to enable export.");
-        }
-    }
-
     ImGui::End();
 
     ImGui::SetNextWindowSize({400.0f, 200.0f}, ImGuiCond_FirstUseEver);
@@ -403,6 +449,16 @@ void Interface::render(VJState& state) {
                 if (isSelected) ImGui::SetItemDefaultFocus();
             }
             ImGui::EndCombo();
+        }
+    } else if (state.audioSource == AudioSourceType::MP3_FILE) {
+        ImGui::SeparatorText("MP3 Hot-Reload");
+        ImGui::SetNextItemWidth(-80.0f);
+        ImGui::InputText("##mp3path", state.pendingMp3Path, sizeof(state.pendingMp3Path));
+        ImGui::SameLine();
+        if (ImGui::Button("Load##mp3")) {
+            if (state.pendingMp3Path[0] != '\0') {
+                state.mp3ReloadRequested = true;
+            }
         }
     }
     ImGui::Separator();

@@ -30,8 +30,11 @@ public:
     void refreshCaptureDevices(VJState& state);
     bool selectCaptureDevice(int deviceIndex);
     void shutdown();
+    void stopLivePlayback();
+    bool prepareSilentAnalysis(const char* path);
 
     bool  prepareOfflineAnalysis(const std::string& filePath);
+    void  advanceOfflineAnalysis(int frameIndex, int fps);
     bool  analyzeTimestamp(float timestampSec, VJState& outState);
     void  finishOfflineAnalysis();
     [[nodiscard]] float getTotalDurationSeconds() const;
